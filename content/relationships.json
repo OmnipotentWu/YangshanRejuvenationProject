@@ -5,6 +5,24 @@
       "target": "YS-P-009",
       "kind": "上下级",
       "note": "Talas 酒吧"
+    },
+    {
+      "source": "YS-P-009",
+      "target": "YS-P-001",
+      "kind": "上下级",
+      "note": ""
+    },
+    {
+      "source": "YS-P-006",
+      "target": "YS-P-001",
+      "kind": "同事",
+      "note": ""
+    },
+    {
+      "source": "YS-P-008",
+      "target": "YS-P-002",
+      "kind": "旧识",
+      "note": "虞存染曾长期庇护卢砚麟免受权力纷争影响，其后分道扬镳"
     }
   ]
 }
