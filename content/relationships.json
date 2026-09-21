@@ -1,0 +1,10 @@
+{
+  "relations": [
+    {
+      "source": "YS-P-006",
+      "target": "YS-P-009",
+      "kind": "上下级",
+      "note": "Talas 酒吧"
+    }
+  ]
+}

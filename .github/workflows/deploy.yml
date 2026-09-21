@@ -1,0 +1,48 @@
+# GitHub Actions：推送主分支 → 构建 → 部署 GitHub Pages
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: 生成 Sveltia CMS 配置
+        run: node scripts/gen-admin-config.mjs
+        env:
+          GITHUB_OWNER: ${{ vars.GH_OWNER }}
+          OAUTH_WORKER_URL: ${{ vars.OAUTH_WORKER_URL }}
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 构建（含 Pagefind 索引）
+        run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,17 @@
+{
+  "name": "yangshan-archive",
+  "version": "2.0.0",
+  "private": true,
+  "description": "仰山复兴计划 · 档案库网站（静态版 / Git 化管理）",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "postbuild": "pagefind --site out --output-subdir pagefind",
+    "preview": "node scripts/preview.mjs",
+    "export-content": "node scripts/export-content.mjs",
+    "optimize-logos": "node scripts/optimize-logos.mjs"
+  },
+  "engines": {
+    "node": ">=22 <23"
+  }
+}

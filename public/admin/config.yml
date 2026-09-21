@@ -1,0 +1,191 @@
+# 仰山档案站 · Sveltia CMS 配置
+# 部署前请替换两处占位符：
+#   1. backend.repo 的 <GITHUB_OWNER> 为你的 GitHub 用户名
+#   2. backend.base_url 为你的 Cloudflare Workers OAuth 代理地址（见 README「OAuth 配置」）
+backend:
+  name: github
+  repo: <GITHUB_OWNER>/YangshanRejuvenationProject
+  branch: main
+  base_url: <OAUTH_WORKER_URL>
+  auth_endpoint: auth
+
+# 图片上传进仓库 public/uploads，正文中以 /YangshanRejuvenationProject/uploads/... 引用
+media_folder: public/uploads
+public_folder: /YangshanRejuvenationProject/uploads
+
+collections:
+  # ================= 谬误备案 =================
+  - name: anomaly
+    label: 谬误备案
+    label_singular: 谬误备案
+    folder: content/anomaly
+    create: true
+    slug: "{{no}}"
+    identifier_field: no
+    fields:
+      - { label: 档案编号, name: no, widget: string, hint: "格式 YS-M-###，如 YS-M-010" }
+      - { label: 谬误识别名, name: title, widget: string }
+      - { label: 特殊谬误标记, name: specialMark, widget: select, options: [远古谬误, 已崩解谬误, 谬误科技, 已合并谬误, 无], default: 无 }
+      - { label: 谬误描述, name: desc, widget: markdown }
+      - { label: 谬误危险性分析, name: danger, widget: markdown, required: false }
+      - { label: 谬误利用性分析, name: utilization, widget: markdown, required: false }
+      - { label: 谬误可逆性分析, name: reversibility, widget: markdown, required: false }
+      - { label: 谬误溯源分析, name: origin, widget: markdown, required: false }
+      - { label: 谬误处置措施, name: disposal, widget: markdown, required: false }
+      - { label: 参考谬误观测或处置报告, name: report, widget: markdown, required: false }
+      - { label: 附记, name: postscript, widget: markdown, required: false, hint: "可选，渲染于所有小节之后" }
+      - { label: 摘要, name: summary, widget: text, required: false }
+      - { label: 标签, name: tags, widget: list, required: false, hint: "如：谬误备案、远古谬误" }
+      - { label: 草稿, name: draft, widget: boolean, default: false, hint: "勾选后不会发布到线上" }
+      - { label: 创建时间, name: created, widget: datetime, format: "YYYY-MM-DD HH:mm:ss", required: false }
+      - { label: 更新时间, name: updated, widget: datetime, format: "YYYY-MM-DD HH:mm:ss", required: false }
+
+  # ================= 社会面个体备案 =================
+  - name: person
+    label: 个体备案
+    label_singular: 个体备案
+    folder: content/person
+    create: true
+    slug: "{{no}}"
+    identifier_field: no
+    fields:
+      - { label: 档案编号, name: no, widget: string, hint: "格式 YS-P-###" }
+      - { label: 姓名, name: title, widget: string }
+      - { label: 识别代称, name: codename, widget: string, required: false }
+      - { label: 性别, name: gender, widget: string, required: false }
+      - { label: 年龄, name: age, widget: string, required: false }
+      - { label: 登记岗位及所在单位, name: unit, widget: text, required: false }
+      - { label: 种族, name: race, widget: string, required: false }
+      - label: 势力归属
+        name: faction
+        widget: relation
+        collection: faction
+        value_field: slug
+        display_fields: [title]
+        search_fields: [title, slug]
+        required: false
+        hint: "先确保对应势力档案已发布并填写了相同的 slug"
+      - { label: 头像, name: avatar, widget: image, required: false, hint: "上传后同步显示于关系网卡片" }
+      - label: 画廊
+        name: gallery
+        widget: list
+        required: false
+        fields:
+          - { label: 图片, name: image, widget: image }
+          - { label: 说明, name: caption, widget: string, required: false }
+      - { label: 个人背景及履历, name: background, widget: markdown, required: false }
+      - { label: 外貌等识别特征, name: appearance, widget: markdown, required: false }
+      - { label: 影响个体特殊谬误概述, name: anomalyEffect, widget: markdown, required: false }
+      - { label: 持有特殊谬误体或谬误科技情况, name: holdings, widget: markdown, required: false }
+      - label: 工作能力评定（六维）
+        name: stats
+        widget: object
+        required: false
+        fields:
+          - { label: 科学素养, name: 科学素养, widget: select, options: ["", S, A, B, C, D], default: "" }
+          - { label: 环境耐受, name: 环境耐受, widget: select, options: ["", S, A, B, C, D], default: "" }
+          - { label: 谬误驾驭, name: 谬误驾驭, widget: select, options: ["", S, A, B, C, D], default: "" }
+          - { label: 力量强度, name: 力量强度, widget: select, options: ["", S, A, B, C, D], default: "" }
+          - { label: 策略应对, name: 策略应对, widget: select, options: ["", S, A, B, C, D], default: "" }
+          - { label: 谈判技巧, name: 谈判技巧, widget: select, options: ["", S, A, B, C, D], default: "" }
+      - { label: 摘要, name: summary, widget: text, required: false }
+      - { label: 标签, name: tags, widget: list, required: false }
+      - { label: 草稿, name: draft, widget: boolean, default: false }
+      - { label: 创建时间, name: created, widget: datetime, format: "YYYY-MM-DD HH:mm:ss", required: false }
+      - { label: 更新时间, name: updated, widget: datetime, format: "YYYY-MM-DD HH:mm:ss", required: false }
+
+  # ================= 势力情报 =================
+  - name: faction
+    label: 势力情报
+    label_singular: 势力情报
+    folder: content/faction
+    create: true
+    slug: "{{no}}"
+    identifier_field: no
+    fields:
+      - { label: 档案编号, name: no, widget: string, hint: "格式 YS-F-###" }
+      - { label: 势力名称, name: title, widget: string }
+      - { label: 口号 / 宗旨, name: slogan, widget: string, required: false }
+      - { label: 势力标识 slug, name: slug, widget: string, hint: "小写字母/数字/短横线；个体备案的「势力归属」按此匹配，关系网据此联动" }
+      - { label: 徽标, name: logo, widget: image, required: false }
+      - { label: 别名, name: altNames, widget: list, required: false }
+      - { label: 正文, name: body, widget: markdown }
+      - { label: 摘要, name: summary, widget: text, required: false }
+      - { label: 标签, name: tags, widget: list, required: false }
+      - { label: 草稿, name: draft, widget: boolean, default: false }
+      - { label: 创建时间, name: created, widget: datetime, format: "YYYY-MM-DD HH:mm:ss", required: false }
+      - { label: 更新时间, name: updated, widget: datetime, format: "YYYY-MM-DD HH:mm:ss", required: false }
+
+  # ================= 设定资料 =================
+  - name: lore
+    label: 设定资料
+    label_singular: 设定资料
+    folder: content/lore
+    create: true
+    slug: "{{no}}"
+    identifier_field: no
+    fields:
+      - { label: 档案编号, name: no, widget: string, hint: "格式 YS-L-###" }
+      - { label: 标题, name: title, widget: string }
+      - { label: 正文, name: body, widget: markdown }
+      - { label: 摘要, name: summary, widget: text, required: false }
+      - { label: 标签, name: tags, widget: list, required: false }
+      - { label: 草稿, name: draft, widget: boolean, default: false }
+      - { label: 创建时间, name: created, widget: datetime, format: "YYYY-MM-DD HH:mm:ss", required: false }
+      - { label: 更新时间, name: updated, widget: datetime, format: "YYYY-MM-DD HH:mm:ss", required: false }
+
+  # ================= 仰山辞海 =================
+  - name: cihai
+    label: 仰山辞海
+    label_singular: 仰山辞海
+    folder: content/cihai
+    create: true
+    slug: "{{no}}"
+    identifier_field: no
+    fields:
+      - { label: 档案编号, name: no, widget: string, hint: "格式 YS-C-###" }
+      - { label: 词条名, name: title, widget: string }
+      - { label: 正文, name: body, widget: markdown }
+      - { label: 摘要, name: summary, widget: text, required: false }
+      - { label: 标签, name: tags, widget: list, required: false }
+      - { label: 草稿, name: draft, widget: boolean, default: false }
+      - { label: 创建时间, name: created, widget: datetime, format: "YYYY-MM-DD HH:mm:ss", required: false }
+      - { label: 更新时间, name: updated, widget: datetime, format: "YYYY-MM-DD HH:mm:ss", required: false }
+
+  # ================= 人物关系 =================
+  - name: relations
+    label: 人物关系
+    files:
+      - label: 关系数据
+        name: relationships
+        file: content/relationships.json
+        fields:
+          - label: 关系列表
+            name: relations
+            widget: list
+            fields:
+              - label: 人员甲
+                name: source
+                widget: relation
+                collection: person
+                value_field: no
+                display_fields: [title]
+                search_fields: [title, no, codename]
+              - label: 人员乙
+                name: target
+                widget: relation
+                collection: person
+                value_field: no
+                display_fields: [title]
+                search_fields: [title, no, codename]
+              - label: 关系类型
+                name: kind
+                widget: select
+                options: [亲属, 同事, 上下级, 合作, 敌对, 旧识, 恋人]
+                default: 同事
+                hint: "如需新增类型：编辑仓库 content/kinds.json 后在此同步使用（输入框支持直接键入新值）"
+              - { label: 备注, name: note, widget: string, required: false }
+
+  # ================= 关系类型 =================
+  # 类型清单维护：直接编辑仓库 content/kinds.json（预设见文件内）
+

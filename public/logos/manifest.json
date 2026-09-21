@@ -1,0 +1,51 @@
+{
+  "yrp": {
+    "file": "yrp.webp",
+    "short": "仰山复兴计划",
+    "names": [
+      "仰山复兴计划",
+      "YRP"
+    ]
+  },
+  "zhaohe": {
+    "file": "zhaohe.webp",
+    "short": "兆和商会",
+    "names": [
+      "兆和商会",
+      "兆和渔业"
+    ]
+  },
+  "sangyu": {
+    "file": "sangyu.webp",
+    "short": "桑榆酒业",
+    "names": [
+      "桑榆酒业",
+      "桑榆学术基金会"
+    ]
+  },
+  "fengrui": {
+    "file": "fengrui.webp",
+    "short": "锋锐安保",
+    "names": [
+      "锋锐安保",
+      "锋锐安保集团"
+    ]
+  },
+  "minxin": {
+    "file": "minxin.webp",
+    "short": "闵心控股",
+    "names": [
+      "闵心控股",
+      "闵心基金"
+    ]
+  },
+  "chenshan": {
+    "file": "chenshan.webp",
+    "short": "沉山",
+    "names": [
+      "沉山",
+      "沉山集团",
+      "沉山自由邦"
+    ]
+  }
+}
