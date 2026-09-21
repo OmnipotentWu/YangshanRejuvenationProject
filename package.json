@@ -13,5 +13,28 @@
   },
   "engines": {
     "node": ">=22 <23"
+  },
+  "dependencies": {
+    "d3": "^7.9.0",
+    "echarts": "^6.1.0",
+    "gray-matter": "^4.0.3",
+    "next": "^15.5.25",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-markdown": "^10.1.0",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/d3": "^7.4.3",
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "better-sqlite3": "^12.11.1",
+    "js-yaml": "^5.4.2",
+    "pagefind": "^1.5.2",
+    "sharp": "^0.35.4",
+    "typescript": "^6.0.3"
   }
 }
