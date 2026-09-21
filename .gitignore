@@ -4,8 +4,8 @@ out/
 tools/node/
 tools/node.zip
 tools/verify-features.mjs
-data/
-docs-source/
+/data/
+/docs-source/
 *.tsbuildinfo
 next-env.d.ts
 .env
