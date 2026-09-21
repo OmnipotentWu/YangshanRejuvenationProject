@@ -77,7 +77,7 @@ GitHub → **Settings → Developer settings → OAuth Apps → New OAuth App**�
 | `GH_OWNER` | 你的 GitHub 用户名 |
 | `OAUTH_WORKER_URL` | `https://ysr-oauth.<你的子域>.workers.dev` |
 
-本地一次配置（让本地后台也能登录）：
+本地一次配置（已默认写入当前仓库地址与 Worker；如需更换仓库或 Worker 再执行）：
 
 ```bash
 # 便携 Node
