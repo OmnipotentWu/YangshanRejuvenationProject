@@ -33,7 +33,7 @@ export default function ArchivesPage() {
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    fetch(asset("/data/archives-index.json"))
+    fetch(asset("/data/archives-index.json"), { cache: "no-store" })
       .then((r) => r.json())
       .then(setData)
       .catch(() => setData({ archives: [], tags: [], factions: [] }));
