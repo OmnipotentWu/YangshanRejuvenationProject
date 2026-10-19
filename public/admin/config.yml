@@ -152,6 +152,108 @@ collections:
       - { label: 创建时间, name: created, widget: datetime, format: "YYYY-MM-DD HH:mm:ss", required: false }
       - { label: 更新时间, name: updated, widget: datetime, format: "YYYY-MM-DD HH:mm:ss", required: false }
 
+  # ================= 编年史 =================
+  - name: chronicle
+    label: 编年史
+    label_singular: 编年史事件
+    folder: content/chronicle
+    create: true
+    slug: "{{date_label}}"
+    fields:
+      - label: 时期
+        name: period
+        widget: select
+        options: [神话时期, 统一时期, 万邦时期]
+      - label: 子分组
+        name: subgroup
+        widget: select
+        options: [前期, 中期, 后期, 末, 钱姓王朝, 虞姓王朝, 袁姓王朝, 孔姓王朝, 皇甫姓王朝, 动乱时期, 郑姓王朝, 何姓王朝, 灵帝年间, 万邦年间]
+        hint: "按时期对应选择：神话时期=前期/中期/后期/末；统一时期=各王朝/动乱时期/灵帝年间；万邦时期=万邦年间"
+      - label: 日期展示标签
+        name: date_label
+        widget: string
+        hint: "原文照抄，如：灵帝7年9月23日、万邦8年春、神话时期中期。保存后同时作为本条事件的定位锚点"
+      - label: 纪年·年（排序用）
+        name: era_year
+        widget: number
+        required: false
+        hint: "仅灵帝年间/万邦年间填写；灵帝元年、万邦元年填 1；神话时期与王朝事件留空"
+      - label: 纪年·月（排序用）
+        name: era_month
+        widget: number
+        required: false
+        hint: "标签精确到日或月时填写，否则留空"
+      - label: 纪年·日（排序用）
+        name: era_day
+        widget: number
+        required: false
+        hint: "标签精确到日时填写，否则留空"
+      - label: 日期精度
+        name: precision
+        widget: select
+        options: [日, 月, 年, 年初, 年末, 春, 夏, 秋, 冬]
+        default: 日
+        hint: "与展示标签一致：精确到日选「日」，仅到月/年仅到年选「月」/「年」；年初、年末、春、夏等修饰标签选对应项；神话/王朝事件留空"
+      - label: 排序号
+        name: sort_order
+        widget: number
+        default: 0
+        hint: "同一日期（或同一阶段/王朝内）出现多条事件时的展示顺序，从 0 开始，数字越小越靠前；单条事件不填即可"
+      - label: 关联档案
+        name: related
+        widget: object
+        required: false
+        hint: "展开后按类型搜索选择档案即可挂接，支持多选，无需复制链接；挂接后档案详情页底部会自动出现「相关历史事件」"
+        fields:
+          - label: 关联 · 谬误备案
+            name: anomaly
+            widget: relation
+            collection: anomaly
+            multiple: true
+            value_field: no
+            display_fields: [title]
+            search_fields: [title, no, codename]
+            required: false
+          - label: 关联 · 个体备案
+            name: person
+            widget: relation
+            collection: person
+            multiple: true
+            value_field: no
+            display_fields: [title]
+            search_fields: [title, no, codename]
+            required: false
+          - label: 关联 · 势力情报
+            name: faction
+            widget: relation
+            collection: faction
+            multiple: true
+            value_field: no
+            display_fields: [title]
+            search_fields: [title, no, codename]
+            required: false
+          - label: 关联 · 设定资料
+            name: lore
+            widget: relation
+            collection: lore
+            multiple: true
+            value_field: no
+            display_fields: [title]
+            search_fields: [title, no]
+            required: false
+          - label: 关联 · 仰山辞海
+            name: cihai
+            widget: relation
+            collection: cihai
+            multiple: true
+            value_field: no
+            display_fields: [title]
+            search_fields: [title, no]
+            required: false
+      - { label: 草稿, name: draft, widget: boolean, default: false }
+      - { label: 创建时间, name: created, widget: datetime, format: "YYYY-MM-DD HH:mm:ss", required: false }
+      - { label: 更新时间, name: updated, widget: datetime, format: "YYYY-MM-DD HH:mm:ss", required: false }
+
   # ================= 人物关系 =================
   - name: relations
     label: 人物关系

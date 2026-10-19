@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getArchive, getFactions, getLinkRefs, getLocalNetwork, linkifyMarkdown, parseMeta } from "../../../lib/queries";
 import { includeDrafts, visibleArchives } from "../../../lib/content";
+import { chroniclesForArchive } from "../../../lib/chronicle";
 import { asset } from "../../../lib/assets";
 import { SIX_DIMS, TYPE_META } from "../../../lib/types";
 import MdView from "../../../components/MdView";
@@ -192,8 +193,38 @@ export default async function ArchiveDetailPage({ params }: { params: Promise<{ 
         {row.type === "lore" || row.type === "cihai" ? (
           <MdView>{linkifyMarkdown(toMd(row.body_md), refs, row.id)}</MdView>
         ) : null}
+
+        <RelatedChronicles archiveId={row.id} />
       </article>
     </div>
+  );
+}
+
+// 相关历史事件：列出关联本档案的编年史事件，跳转 /chronicle 对应锚点
+function RelatedChronicles({ archiveId }: { archiveId: string }) {
+  const events = chroniclesForArchive(archiveId);
+  if (!events.length) return null;
+  return (
+    <section style={{ marginTop: 36 }}>
+      <h2 style={{ fontSize: 19 }}>相关历史事件</h2>
+      <div className="card" style={{ padding: "6px 18px" }}>
+        {events.map((e) => {
+          const plain = e.body.replace(/[#>*`\-[\]()!]/g, "").replace(/\s+/g, "");
+          const excerpt = plain.length > 64 ? plain.slice(0, 64) + "…" : plain;
+          return (
+            <div key={e.slug} className="archive-row" style={{ gap: 14 }}>
+              <span className="archive-no" style={{ whiteSpace: "nowrap" }}>{e.date_label}</span>
+              <span className="t" style={{ fontWeight: 400, fontSize: 14.5 }}>
+                {excerpt}
+              </span>
+              <span className="meta">
+                <Link href={`/chronicle/#${encodeURIComponent(e.slug)}`}>查看 →</Link>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

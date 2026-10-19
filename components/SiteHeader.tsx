@@ -13,6 +13,7 @@ export default function SiteHeader() {
   const nav = [
     { href: "/", label: "首页" },
     { href: "/archives", label: "档案库", match: (p: string) => p.startsWith("/archives") },
+    { href: "/chronicle", label: "编年史", match: (p: string) => p.startsWith("/chronicle") },
     { href: "/network", label: "关系网" },
     { href: "/admin", label: "后台" },
   ];
