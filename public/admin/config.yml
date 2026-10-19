@@ -199,6 +199,10 @@ collections:
         widget: number
         default: 0
         hint: "同一日期（或同一阶段/王朝内）出现多条事件时的展示顺序，从 0 开始，数字越小越靠前；单条事件不填即可"
+      - label: 事件正文
+        name: body
+        widget: markdown
+        hint: "该时间下发生的事件描述，多数一两句即可；保存后原样展示于编年史时间轴"
       - label: 关联档案
         name: related
         widget: object
