@@ -21,14 +21,14 @@ export default function RadarChart({ stats, height = 340 }: { stats: Record<stri
         indicator: SIX_DIMS.map((d) => ({ name: d, max: 5 })),
         radius: "62%",
         center: ["50%", "52%"],
-        axisName: { color: "#6E675C", fontSize: 13, fontFamily: "inherit" },
+        axisName: { color: "#7d7a70", fontSize: 13, fontFamily: "inherit" },
         splitArea: {
           areaStyle: {
-            color: ["rgba(194,155,64,0.03)", "rgba(194,155,64,0.07)", "rgba(194,155,64,0.03)", "rgba(194,155,64,0.07)", "rgba(194,155,64,0.1)"],
+            color: ["rgba(194,155,64,0.02)", "rgba(194,155,64,0.05)", "rgba(194,155,64,0.02)", "rgba(194,155,64,0.05)", "rgba(194,155,64,0.09)"],
           },
         },
-        splitLine: { lineStyle: { color: "rgba(110,103,92,0.4)" } },
-        axisLine: { lineStyle: { color: "rgba(110,103,92,0.5)" } },
+        splitLine: { lineStyle: { color: "rgba(242,242,240,0.14)" } },
+        axisLine: { lineStyle: { color: "rgba(242,242,240,0.18)" } },
       },
       tooltip: {
         trigger: "item",

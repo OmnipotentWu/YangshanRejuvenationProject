@@ -1,78 +1,108 @@
 import Link from "next/link";
-import { getFactions, latestArchives, parseMeta, stats } from "../lib/queries";
+import { getFactions, latestArchives, stats } from "../lib/queries";
 import { asset } from "../lib/assets";
+import { fmtDate } from "../lib/format";
+import { SITE_COPY } from "../lib/site-copy";
 import { TYPE_META, TYPE_ORDER } from "../lib/types";
-import ArchiveCard from "../components/ArchiveCard";
 
 export default function HomePage() {
   const s = stats();
   const latest = latestArchives(8);
   const factions = getFactions();
+  const cp = SITE_COPY.home;
 
   return (
     <div>
-      <section className="hero">
+      <section className="stage grid-bg">
+        <span className="stage-slash s1" aria-hidden="true" />
+        <span className="stage-slash s2" aria-hidden="true" />
+        <span className="stage-slash s3" aria-hidden="true" />
+        <span className="stage-slash s4" aria-hidden="true" />
         <div className="container">
-          <div className="org">仰山复兴计划项目组 · YRP</div>
-          <h1>仰山市档案与公共安全部</h1>
-          <div className="motto-line">自由 · 平衡 · 新知</div>
-          <p className="hero-desc">
-            本系统收录仰山市境内登记在册的谬误现象、社会面重要个体、各方势力情报与世界观基础设定。
-            全部已发布档案对访客公开，欢迎自由调阅。
-          </p>
+          <div className="stage-inner">
+            <div className="stage-title">
+              <div className="eyebrow">{cp.eyebrow}</div>
+              <h1 className="t-solid">{cp.titleSolid}</h1>
+              <div className="t-outline" aria-hidden="true">{cp.titleOutline}</div>
+              <p className="t-sub">{cp.desc}</p>
+            </div>
+            <aside className="stage-stats">
+              <div className="ss-total">
+                <span className="n">{s.total}</span>
+                <span className="u">{cp.statLabel} · {cp.statUnit}</span>
+              </div>
+              <div className="ss-list">
+                {TYPE_ORDER.map((t) => (
+                  <Link key={t} href={`/archives/?type=${t}`} className="ss-row">
+                    <span>{TYPE_META[t].label}</span>
+                    <span className="mono">{String(s.byType[t]).padStart(2, "0")}</span>
+                  </Link>
+                ))}
+              </div>
+            </aside>
+          </div>
         </div>
       </section>
 
       <div className="container">
-        <div className="stat-strip">
-          {TYPE_ORDER.map((t) => (
-            <Link key={t} href={`/archives?type=${t}`} className="stat-box">
-              <div className="num">{s.byType[t]}</div>
-              <div className="label">{TYPE_META[t].label}</div>
-            </Link>
-          ))}
-          <Link href="/random" className="stat-box" title="随机调阅一份档案">
-            <div className="num">⧉</div>
-            <div className="label">随机调阅</div>
-          </Link>
-        </div>
+        <div className="ruler"><span className="ruler-label">{cp.rulerLabel}</span></div>
 
         <div className="section-head">
-          <h2>最新发布</h2>
-          <Link className="more" href="/archives">进入档案库 →</Link>
+          <h2>{cp.latestTitle}</h2>
+          <Link className="more" href="/archives/">{cp.latestMore} →</Link>
         </div>
-        <div className="card-grid">
+        <div className="intel-list">
           {latest.map((a) => (
-            <ArchiveCard
-              key={a.id}
-              id={a.id}
-              archive_no={a.archive_no}
-              type={a.type}
-              title={a.title}
-              codename={a.codename}
-              updated_at={a.updated_at}
-            />
+            <Link key={a.id} href={`/archives/${a.id}/`} className="intel-row">
+              <span className="ir-type">{TYPE_META[a.type].label}</span>
+              <span className="ir-date">{fmtDate(a.updated_at)}</span>
+              <span className="ir-title">
+                <span className="ir-code">{a.archive_no}</span>
+                {a.title}
+              </span>
+              <span className="ir-arrow" aria-hidden="true">▸</span>
+            </Link>
           ))}
         </div>
 
         <div className="section-head">
-          <h2>势力情报</h2>
-          <Link className="more" href="/archives?type=faction">全部势力 →</Link>
+          <h2>{cp.factionTitle}</h2>
+          <Link className="more" href="/archives/?type=faction">{cp.factionAll} →</Link>
         </div>
-        <div className="logo-wall">
-          {factions.map((f) => (
-            <Link key={f.id} href={`/archives/${f.id}/`} className="card logo-cell">
-              {f.logo_path ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={asset(f.logo_path)} alt={f.title} />
-              ) : (
-                <span className="mono muted">{f.title.slice(0, 2)}</span>
-              )}
-              <div className="fname">{f.title}</div>
-              <div className="fslogan">{f.slogan || ""}</div>
-            </Link>
-          ))}
+        {factions.length ? (
+          <div className="logo-wall">
+            {factions.map((f) => (
+              <Link key={f.id} href={`/archives/${f.id}/`} className="logo-cell">
+                {f.logo_path ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={asset(f.logo_path)} alt={f.title} />
+                ) : (
+                  <span className="mono muted">{f.title.slice(0, 2)}</span>
+                )}
+                <div className="fname">{f.title}</div>
+                <div className="fslogan">{f.slogan || ""}</div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="list-empty">{cp.factionEmpty}</div>
+        )}
+
+        <div className="section-head">
+          <h2>{cp.catTitle}</h2>
         </div>
+        {TYPE_ORDER.map((t, i) => (
+          <Link key={t} href={`/archives/?type=${t}`} className="cat-strip">
+            <span className="cs-no">{String(i + 1).padStart(2, "0")}</span>
+            <span className="cs-head">
+              <span className="cs-zh">{TYPE_META[t].label}</span>
+              <span className="cs-en">{cp.catEn[t]} · {TYPE_META[t].noPrefix}</span>
+              <span className="cs-count">{String(s.byType[t]).padStart(2, "0")}</span>
+            </span>
+            <span className="cs-desc">{TYPE_META[t].desc}</span>
+            <span className="cs-wedge" aria-hidden="true" />
+          </Link>
+        ))}
       </div>
     </div>
   );

@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { asset } from "../lib/assets";
+import { SITE_COPY } from "../lib/site-copy";
 
 export default function Gallery({ items }: { items: { src: string; caption?: string }[] }) {
   const [open, setOpen] = useState<number | null>(null);
   if (!items.length) return null;
   return (
     <>
-      <h2 style={{ marginTop: 30, fontSize: 19 }}>图档</h2>
+      <h2 className="sp-title" style={{ marginTop: 34 }}>{SITE_COPY.detail.galleryTitle}</h2>
       <div className="gallery-grid">
         {items.map((g, i) => (
           <figure key={g.src} className="gal-card" onClick={() => setOpen(i)}>

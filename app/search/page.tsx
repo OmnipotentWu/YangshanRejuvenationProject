@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { asset } from "../../lib/assets";
+import { SITE_COPY } from "../../lib/site-copy";
 import { TYPE_META, TYPE_ORDER } from "../../lib/types";
 import type { ArchiveType } from "../../lib/types";
 
@@ -73,12 +74,12 @@ export default function SearchPage() {
 
   return (
     <div className="container fade-in" style={{ paddingTop: 28, maxWidth: 860 }}>
-      <div className="section-head" style={{ marginTop: 0 }}>
-        <h2>档案检索</h2>
-      </div>
+      <header className="page-head">
+        <div className="eyebrow">{SITE_COPY.search.eyebrow}</div>
+        <h1>{SITE_COPY.search.title}</h1>
+      </header>
       <form
-        className="filter-bar"
-        style={{ padding: "14px 16px" }}
+        className="search-box"
         onSubmit={(e) => {
           e.preventDefault();
           run(q);
@@ -88,42 +89,38 @@ export default function SearchPage() {
           type="text"
           value={q}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="输入标题、识别代称或正文关键词…"
-          style={{ flex: 1, minWidth: 240, padding: "7px 12px", fontSize: 15 }}
+          placeholder={SITE_COPY.search.placeholder}
         />
-        <button type="submit" className="btn btn-gold">检索</button>
+        <button type="submit">{SITE_COPY.search.button}</button>
       </form>
 
-      {loading ? <p className="muted" style={{ fontSize: 13.5 }}>检索中…</p> : null}
+      {loading ? <p className="muted" style={{ fontSize: 13.5 }}>{SITE_COPY.search.searching}</p> : null}
       {!loading && started && total === 0 ? (
-        <p className="muted" style={{ padding: "24px 0" }}>未检索到与「{q}」相关的档案。</p>
+        <p className="muted" style={{ padding: "24px 0" }}>{SITE_COPY.search.empty(q)}</p>
       ) : null}
       {!loading && started && total > 0 ? (
-        <p className="muted" style={{ fontSize: 13.5 }}>共命中 {total} 份档案：</p>
+        <p className="muted" style={{ fontSize: 13.5 }}>{SITE_COPY.search.hitCount(total)}</p>
       ) : null}
       {!started && !loading ? (
-        <p className="muted">输入关键词以检索全部档案（标题 / 识别代称 / 正文全文）。</p>
+        <p className="search-hint">{SITE_COPY.search.hint}</p>
       ) : null}
 
       {TYPE_ORDER.map((t) =>
         groups[t]?.length ? (
           <div key={t} className="result-group">
             <h3>
-              {TYPE_META[t].label} <span className="muted mono" style={{ fontSize: 12 }}>{groups[t]!.length}</span>
+              {TYPE_META[t].label}{" "}
+              <span className="muted mono" style={{ fontSize: 12 }}>{groups[t]!.length}</span>
             </h3>
             {groups[t]!.map((h, i) => (
-              <div key={i} className="archive-row" style={{ alignItems: "baseline" }}>
-                <span className="archive-no">{h.meta.no || ""}</span>
-                <span style={{ flex: 1, minWidth: 220 }}>
-                  <a href={asset(h.url)} style={{ fontWeight: 600, fontSize: 15.5, color: "var(--ink)" }}>
-                    {h.meta.title || h.url}
-                  </a>
-                  <span
-                    className="muted"
-                    style={{ display: "block", fontSize: 12.5 }}
-                    dangerouslySetInnerHTML={{ __html: hitExcerpt(h) }}
-                  />
-                </span>
+              <div key={i} className="result-item">
+                <a className="ri-title" href={asset(h.url)}>
+                  {h.meta.title || h.url}
+                </a>
+                <div
+                  className="ri-excerpt"
+                  dangerouslySetInnerHTML={{ __html: hitExcerpt(h) }}
+                />
               </div>
             ))}
           </div>

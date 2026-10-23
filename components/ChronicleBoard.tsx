@@ -5,6 +5,9 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import MdView from "./MdView";
 import { TYPE_META } from "../lib/types";
 import type { ArchiveType } from "../lib/types";
+import { SITE_COPY } from "../lib/site-copy";
+
+const cc = SITE_COPY.chronicle;
 
 export interface ChronicleItem {
   slug: string;
@@ -86,6 +89,7 @@ function useReducedMotion() {
 }
 
 export default function ChronicleBoard({ events, periods }: { events: ChronicleItem[]; periods: PeriodMeta[] }) {
+  const cc = SITE_COPY.chronicle;
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const rootRef = useRef<HTMLDivElement>(null);
@@ -194,16 +198,16 @@ export default function ChronicleBoard({ events, periods }: { events: ChronicleI
           className="chron-filter"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="过滤事件文本…"
-          aria-label="过滤事件文本"
+          placeholder={cc.filterPlaceholder}
+          aria-label={cc.filterPlaceholder}
         />
         <span className="chron-count mono">
-          {grouped.visibleCount} / {events.length}
+          {cc.count(grouped.visibleCount, events.length)}
         </span>
       </div>
 
       {grouped.visibleCount === 0 ? (
-        <p className="muted" style={{ padding: "30px 0" }}>没有符合过滤条件的事件。</p>
+        <p className="muted" style={{ padding: "30px 0" }}>{cc.empty}</p>
       ) : (
         grouped.list.map((p, i) => (
           <section key={p.period.id} id={`chron-period-${i}`} className="chron-period">
@@ -256,7 +260,7 @@ function EventRow({ r, open, onToggle, dated }: { r: EventRowData; open: boolean
         </div>
         {expandable ? (
           <button type="button" className="chron-more" onClick={() => onToggle(ev.slug)}>
-            {open ? "收起 ▴" : "详情 ▾"}
+            {open ? cc.collapse : cc.expand}
           </button>
         ) : null}
         <div className="chron-rowfoot">
@@ -270,7 +274,7 @@ function EventRow({ r, open, onToggle, dated }: { r: EventRowData; open: boolean
               ))}
             </span>
           ) : null}
-          <a className="chron-anchor" href={`#${ev.slug}`} title="定位链接" aria-label="事件定位链接">
+          <a className="chron-anchor" href={`#${ev.slug}`} title={cc.anchorTitle} aria-label={cc.anchorTitle}>
             ¶
           </a>
         </div>

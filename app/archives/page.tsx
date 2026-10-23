@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { asset } from "../../lib/assets";
 import { GRADES, SIX_DIMS, SPECIAL_MARKS, TYPE_META, TYPE_ORDER } from "../../lib/types";
 import type { ArchiveType } from "../../lib/types";
+import { SITE_COPY } from "../../lib/site-copy";
+import { fmtDate } from "../../lib/format";
 
 interface Item {
   id: number;
@@ -21,6 +23,7 @@ interface Item {
 }
 
 const PAGE_SIZE = 12;
+const cp = SITE_COPY.archives;
 
 export default function ArchivesPage() {
   const [data, setData] = useState<{ archives: Item[]; tags: string[]; factions: { id: number; title: string; slug: string }[] } | null>(null);
@@ -73,18 +76,19 @@ export default function ArchivesPage() {
   }
 
   if (!data) {
-    return <div className="container" style={{ paddingTop: 40 }}><p className="muted">档案索引加载中…</p></div>;
+    return <div className="container" style={{ paddingTop: 40 }}><div className="list-empty">{cp.loading}</div></div>;
   }
 
   return (
     <div className="container fade-in" style={{ paddingTop: 28, paddingBottom: 20 }}>
-      <div className="section-head" style={{ marginTop: 0 }}>
-        <h2>档案库</h2>
-        <span className="muted mono" style={{ fontSize: 12.5 }}>共 {filtered.length} 份在册档案</span>
+      <div className="eyebrow">{cp.eyebrow}</div>
+      <div className="page-head">
+        <h1>{cp.title}</h1>
+        <div className="ph-count">{cp.count(filtered.length)}</div>
       </div>
 
       <div className="tabs">
-        <button type="button" className={`tab ${type === "all" ? "active" : ""}`} onClick={() => { setType("all"); resetPage(); }}>全部</button>
+        <button type="button" className={`tab ${type === "all" ? "active" : ""}`} onClick={() => { setType("all"); resetPage(); }}>{cp.tabAll}</button>
         {TYPE_ORDER.map((t) => (
           <button key={t} type="button" className={`tab ${type === t ? "active" : ""}`} onClick={() => { setType(t); resetPage(); }}>
             {TYPE_META[t].label}
@@ -93,20 +97,20 @@ export default function ArchivesPage() {
       </div>
 
       <div className="filter-bar">
-        <label>
-          标签{" "}
+        <label className="fb-item">
+          <span className="fb-label">{cp.filterTag}</span>
           <select value={tag} onChange={(e) => { setTag(e.target.value); resetPage(); }}>
-            <option value="">全部</option>
+            <option value="">{cp.filterAll}</option>
             {data.tags.map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
         </label>
         {type === "anomaly" || type === "all" ? (
-          <label>
-            特殊谬误标记{" "}
+          <label className="fb-item">
+            <span className="fb-label">{cp.filterMark}</span>
             <select value={mark} onChange={(e) => { setMark(e.target.value); resetPage(); }}>
-              <option value="">全部</option>
+              <option value="">{cp.filterAll}</option>
               {SPECIAL_MARKS.map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
@@ -114,80 +118,76 @@ export default function ArchivesPage() {
           </label>
         ) : null}
         {type === "person" || type === "all" ? (
-          <>
-            <label>
-              所属势力{" "}
-              <select value={faction} onChange={(e) => { setFaction(e.target.value); resetPage(); }}>
-                <option value="">全部</option>
-                {data.factions.map((f) => (
-                  <option key={f.slug || f.id} value={f.slug}>{f.title}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              六维评级{" "}
-              <select value={dim} onChange={(e) => { setDim(e.target.value); resetPage(); }}>
-                <option value="">维度</option>
-                {SIX_DIMS.map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-              <select value={grade} onChange={(e) => { setGrade(e.target.value); resetPage(); }} style={{ marginLeft: 4 }}>
-                <option value="">评级</option>
-                {GRADES.map((g) => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </select>
-            </label>
-          </>
+          <label className="fb-item">
+            <span className="fb-label">{cp.filterFaction}</span>
+            <select value={faction} onChange={(e) => { setFaction(e.target.value); resetPage(); }}>
+              <option value="">{cp.filterAll}</option>
+              {data.factions.map((f) => (
+                <option key={f.slug || f.id} value={f.slug}>{f.title}</option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {type === "person" || type === "all" ? (
+          <label className="fb-item">
+            <span className="fb-label">{cp.filterStat}</span>
+            <select value={dim} onChange={(e) => { setDim(e.target.value); resetPage(); }}>
+              <option value="">{cp.filterDim}</option>
+              {SIX_DIMS.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+            <select value={grade} onChange={(e) => { setGrade(e.target.value); resetPage(); }}>
+              <option value="">{cp.filterGrade}</option>
+              {GRADES.map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </label>
         ) : null}
         {(tag || mark || faction || dim || grade) ? (
           <button
             type="button"
-            className="btn btn-sm btn-danger"
+            className="fb-clear"
             onClick={() => { setTag(""); setMark(""); setFaction(""); setDim(""); setGrade(""); resetPage(); }}
           >
-            清除
+            {cp.filterClear}
           </button>
         ) : null}
       </div>
 
       {rows.length === 0 ? (
-        <p className="muted" style={{ padding: "30px 0" }}>没有符合条件的档案。</p>
+        <div className="list-empty">{cp.empty}</div>
       ) : (
-        <div className="card-grid">
+        <div className="intel-list">
           {rows.map((a) => (
-            <div key={a.id} className="card fade-in">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-                <span className="archive-no">{a.no}</span>
-                <span className="badge badge-gold">{TYPE_META[a.type].label}</span>
-              </div>
-              <div className="card-title" style={{ marginTop: 6 }}>
-                <Link href={`/archives/${a.id}/`}>{a.title}</Link>
-                {a.codename ? <span className="muted" style={{ fontSize: 13, fontWeight: 400 }}>（{a.codename}）</span> : null}
-              </div>
+            <Link key={a.id} href={`/archives/${a.id}/`} className={`intel-row ${a.summary ? "has-summary" : ""}`}>
+              <span className="ir-type">{TYPE_META[a.type].label}</span>
+              <span className="ir-date">{fmtDate(a.updated)}</span>
+              <span className="ir-title">
+                <span className="ir-code">{a.no}</span>
+                {a.title}
+              </span>
+              <span className="ir-arrow" aria-hidden="true">▸</span>
               {a.summary ? (
-                <p className="muted" style={{ fontSize: 13.5, margin: "0 0 8px" }}>
-                  {a.summary.length > 90 ? a.summary.slice(0, 90) + "…" : a.summary}
-                </p>
+                <span className="ir-summary">{a.summary.length > 90 ? a.summary.slice(0, 90) + "…" : a.summary}</span>
               ) : null}
-              <div className="mono muted" style={{ fontSize: 11.5 }}>更新于 {a.updated}</div>
-            </div>
+            </Link>
           ))}
         </div>
       )}
 
       {pages > 1 ? (
-        <nav className="pager" aria-label="分页">
-          {cur > 1 ? <button type="button" className="tab" onClick={() => setPage(cur - 1)}>上一页</button> : null}
+        <nav className="pager" aria-label={cp.pagerAria}>
+          {cur > 1 ? <a onClick={() => setPage(cur - 1)}>{cp.pagePrev}</a> : null}
           {Array.from({ length: pages }, (_, i) => i + 1).map((p) =>
             p === cur ? (
               <span key={p} className="cur">{p}</span>
             ) : (
-              <button key={p} type="button" className="tab" onClick={() => setPage(p)}>{p}</button>
+              <a key={p} onClick={() => setPage(p)}>{p}</a>
             )
           )}
-          {cur < pages ? <button type="button" className="tab" onClick={() => setPage(cur + 1)}>下一页</button> : null}
+          {cur < pages ? <a onClick={() => setPage(cur + 1)}>{cp.pageNext}</a> : null}
         </nav>
       ) : null}
     </div>

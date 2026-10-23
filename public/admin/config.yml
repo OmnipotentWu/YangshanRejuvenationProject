@@ -286,12 +286,27 @@ collections:
                 search_fields: [title, no, codename]
               - label: 关系类型
                 name: kind
-                widget: select
-                options: [亲属, 同事, 上下级, 合作, 敌对, 旧识, 恋人]
+                widget: relation
+                collection: relation-kinds
+                file: kinds
+                value_field: "{{kinds.*.name}}"
+                display_fields: ["{{kinds.*.name}}"]
+                search_fields: ["{{kinds.*.name}}"]
                 default: 同事
-                hint: "如需新增类型：编辑仓库 content/kinds.json 后在此同步使用（输入框支持直接键入新值）"
+                hint: "类型清单在「关系类型」一栏维护；改名/删除旧类型不会使已有关系失效，会以原名字继续显示"
               - { label: 备注, name: note, widget: string, required: false }
 
   # ================= 关系类型 =================
-  # 类型清单维护：直接编辑仓库 content/kinds.json（预设见文件内）
+  - name: relation-kinds
+    label: 关系类型
+    files:
+      - label: 类型列表
+        name: kinds
+        file: content/kinds.json
+        fields:
+          - label: 类型清单
+            name: kinds
+            widget: list
+            fields:
+              - { label: 类型名, name: name, widget: string }
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import SiteHeader from "../components/SiteHeader";
+import SiteRail from "../components/SiteRail";
+import StatusBar from "../components/StatusBar";
 import SiteFooter from "../components/SiteFooter";
 
 export const metadata: Metadata = {
@@ -12,9 +13,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-CN">
       <body>
-        <SiteHeader />
-        <main>{children}</main>
-        <SiteFooter />
+        <SiteRail />
+        <div className="shell-main">
+          <StatusBar />
+          <main>{children}</main>
+          <SiteFooter />
+        </div>
       </body>
     </html>
   );

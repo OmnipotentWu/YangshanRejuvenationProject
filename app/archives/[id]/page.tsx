@@ -5,6 +5,8 @@ import { getArchive, getFactions, getLinkRefs, getLocalNetwork, linkifyMarkdown,
 import { includeDrafts, visibleArchives } from "../../../lib/content";
 import { chroniclesForArchive } from "../../../lib/chronicle";
 import { asset } from "../../../lib/assets";
+import { fmtDate } from "../../../lib/format";
+import { SITE_COPY } from "../../../lib/site-copy";
 import { SIX_DIMS, TYPE_META } from "../../../lib/types";
 import MdView from "../../../components/MdView";
 import RadarChart from "../../../components/RadarChart";
@@ -18,15 +20,29 @@ function toMd(text: string): string {
   return text.split("\n").map((s) => s.trim()).filter(Boolean).join("\n\n");
 }
 
-function FieldBlock({ label, text, refs, id }: { label: string; text: string; refs: any[]; id: string }) {
+// 字段小节：金色等宽小节码 + 字段名 + 细线引导 + 正文；空字段整节不渲染
+function SecBlock({ n, name, text, refs, id }: { n: number; name: string; text: string; refs: any[]; id: string }) {
   if (!text || !text.trim()) return null;
+  const dc = SITE_COPY.detail;
   const md = linkifyMarkdown(toMd(text), refs, id);
   return (
-    <div className="field-block">
-      <div className="f-label">{label}</div>
-      <MdView>{md}</MdView>
-    </div>
+    <section className="sec-block">
+      <div className="sec-head">
+        <span className="sec-code">{dc.secCode(n)}</span>
+        <span className="sec-name">{name}</span>
+        <span className="sec-rule" aria-hidden="true" />
+      </div>
+      <div className="sec-body">
+        <MdView>{md}</MdView>
+      </div>
+    </section>
   );
+}
+
+// 档号拆分：YS-M-021 → 前缀 YS-M（主文字色）+ 尾号 021（金色）
+function splitNo(no: string): { pre: string; suf: string } {
+  const i = no.lastIndexOf("-");
+  return i < 0 ? { pre: no, suf: "" } : { pre: no.slice(0, i), suf: no.slice(i + 1) };
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -49,181 +65,246 @@ export default async function ArchiveDetailPage({ params }: { params: Promise<{ 
   const refs = getLinkRefs();
   const factions = getFactions();
   const tm = TYPE_META[row.type as keyof typeof TYPE_META];
+  const dc = SITE_COPY.detail;
+  const noParts = splitNo(row.archive_no);
+  const events = chroniclesForArchive(row.id);
+  let sec = 0;
+  const nextSec = () => ++sec;
+
+  // 关联档案：编年事件同事件的其它档案 + 人员的关系邻接
+  const relatedIds = new Set<string>();
+  for (const e of events) for (const r of e.related) if (r.id !== row.id) relatedIds.add(r.id);
+  if (row.type === "person") {
+    const local = getLocalNetwork(row.id);
+    for (const e of local.edges) {
+      if (e.source !== row.id) relatedIds.add(e.source);
+      if (e.target !== row.id) relatedIds.add(e.target);
+    }
+  }
+  const relatedArchives = [...relatedIds]
+    .map((rid) => getArchive(rid))
+    .filter((a): a is NonNullable<typeof a> => !!a && a.status === "published")
+    .slice(0, 6);
 
   return (
-    <div className="container fade-in" style={{ paddingTop: 28 }}>
+    <div className="container fade-in">
       <meta data-pagefind-meta={`archive_type:${row.type}`} />
       <meta data-pagefind-meta={`no:${row.archive_no}`} />
       <meta data-pagefind-meta={`title:${row.title.replace(/"/g, "")}`} />
-      <article className="read-body">
-        <header className="archive-head">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-            <span className="archive-no">{row.archive_no}</span>
-            <span className="badge badge-gold">{tm.label}</span>
-          </div>
-          <div style={{ display: "flex", gap: 18, alignItems: "flex-start" }}>
-            {meta.avatar ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={asset(meta.avatar)}
-                alt={row.title}
-                className="avatar-frame"
-              />
-            ) : null}
-            <div style={{ flex: 1 }}>
-              <h1>
-                {row.title}
-                {row.codename ? <span className="muted" style={{ fontSize: 16, fontWeight: 400 }}>　识别代称：{row.codename}</span> : null}
-              </h1>
-              <div className="meta-line mono">
-                录入：{row.author_name || "档案馆"} ｜ 更新于 {row.updated_at}
-              </div>
-              {row.tags.length ? (
-                <div style={{ marginTop: 4 }}>
-                  {row.tags.map((t: any) => (
-                    <Link key={t.id} className="tag-chip" href={`/archives?tag=${encodeURIComponent(t.name)}`}>
-                      {t.name}
-                    </Link>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </header>
 
-        {row.type === "anomaly" ? (
-          <>
-            {meta.specialMark && meta.specialMark !== "无" ? (
-              <p>
-                <span className="badge badge-danger" style={{ fontSize: 13 }}>特殊谬误标记 · {meta.specialMark}</span>
-              </p>
-            ) : null}
-            <FieldBlock label="谬误描述" text={meta.desc || ""} refs={refs} id={row.id} />
-            <FieldBlock label="谬误危险性分析" text={meta.danger || ""} refs={refs} id={row.id} />
-            <FieldBlock label="谬误利用性分析" text={meta.utilization || ""} refs={refs} id={row.id} />
-            <FieldBlock label="谬误可逆性分析" text={meta.reversibility || ""} refs={refs} id={row.id} />
-            <FieldBlock label="谬误溯源分析" text={meta.origin || ""} refs={refs} id={row.id} />
-            <FieldBlock label="谬误处置措施" text={meta.disposal || ""} refs={refs} id={row.id} />
-            <FieldBlock label="参考谬误观测或处置报告" text={meta.report || ""} refs={refs} id={row.id} />
-            {row.body_md ? <FieldBlock label="附记" text={row.body_md} refs={refs} id={row.id} /> : null}
-          </>
+      <header className="dossier-head">
+        <div className="eyebrow">{dc.eyebrowOf(tm.noPrefix, tm.label)}</div>
+        <div className="dossier-no">
+          <span>{noParts.pre}</span>
+          {noParts.suf ? (
+            <>
+              <span className="dossier-slash">-</span>
+              <span className="suffix">{noParts.suf}</span>
+            </>
+          ) : null}
+        </div>
+        <h1>{row.title}</h1>
+        {row.codename ? <div className="dossier-codename">{dc.codename} // {row.codename}</div> : null}
+        <div className="d-meta">
+          {dc.recordedBy(row.author_name || dc.recordedByName, fmtDate(row.updated_at))}
+        </div>
+        {row.type === "anomaly" && meta.specialMark && meta.specialMark !== "无" ? (
+          <div><span className="badge badge-danger">{dc.markBadge(meta.specialMark)}</span></div>
         ) : null}
+        {row.tags.length ? (
+          <div className="d-tags">
+            {row.tags.map((t: any) => (
+              <Link key={t.id} className="tag-chip" href={`/archives/?tag=${encodeURIComponent(t.name)}`}>
+                {t.name}
+              </Link>
+            ))}
+          </div>
+        ) : null}
+      </header>
 
-        {row.type === "person" ? (
-          <>
-            <table className="info-table">
-              <tbody>
-                <tr><th>姓名</th><td>{row.title}</td></tr>
-                {row.codename ? <tr><th>识别代称</th><td className="mono">{row.codename}</td></tr> : null}
-                {meta.gender ? <tr><th>性别</th><td>{meta.gender}</td></tr> : null}
-                {meta.age ? <tr><th>年龄</th><td>{meta.age}</td></tr> : null}
-                {meta.unit ? <tr><th>登记岗位及所在单位</th><td>{meta.unit}</td></tr> : null}
-                {meta.race ? <tr><th>种族</th><td>{meta.race}</td></tr> : null}
-                {(() => {
-                  if (!meta.faction) return null;
-                  const f = factions.find((x) => x.slug === meta.faction);
-                  return (
-                    <tr>
-                      <th>势力归属</th>
-                      <td>
-                        {f ? (
-                          <Link href={`/archives/${f.id}`} className="badge badge-gold" style={{ fontSize: 13 }}>
-                            {f.logo_path ? "⚜ " : ""}{f.title}
+      <div className="dossier-grid">
+        <div>
+          {row.type === "anomaly" ? (
+            <>
+              <SecBlock n={nextSec()} name={dc.secDesc} text={meta.desc || ""} refs={refs} id={row.id} />
+              <SecBlock n={nextSec()} name={dc.secDanger} text={meta.danger || ""} refs={refs} id={row.id} />
+              <SecBlock n={nextSec()} name={dc.secUtilization} text={meta.utilization || ""} refs={refs} id={row.id} />
+              <SecBlock n={nextSec()} name={dc.secReversibility} text={meta.reversibility || ""} refs={refs} id={row.id} />
+              <SecBlock n={nextSec()} name={dc.secOrigin} text={meta.origin || ""} refs={refs} id={row.id} />
+              <SecBlock n={nextSec()} name={dc.secDisposal} text={meta.disposal || ""} refs={refs} id={row.id} />
+              <SecBlock n={nextSec()} name={dc.secReport} text={meta.report || ""} refs={refs} id={row.id} />
+              <SecBlock n={nextSec()} name={dc.secPostscript} text={row.body_md} refs={refs} id={row.id} />
+            </>
+          ) : null}
+
+          {row.type === "person" ? (
+            <>
+              {meta.avatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={asset(meta.avatar)} alt={row.title} className="avatar-frame" />
+              ) : null}
+              <div className="info-grid">
+                <div className="ig-cell"><span className="ig-label">{dc.infoName}</span><span className="ig-value">{row.title}</span></div>
+                {row.codename ? <div className="ig-cell"><span className="ig-label">{dc.codename}</span><span className="ig-value mono">{row.codename}</span></div> : null}
+                {meta.gender ? <div className="ig-cell"><span className="ig-label">{dc.infoGender}</span><span className="ig-value">{meta.gender}</span></div> : null}
+                {meta.age ? <div className="ig-cell"><span className="ig-label">{dc.infoAge}</span><span className="ig-value">{meta.age}</span></div> : null}
+                {meta.unit ? <div className="ig-cell ig-full"><span className="ig-label">{dc.infoUnit}</span><span className="ig-value">{meta.unit}</span></div> : null}
+                {meta.race ? <div className="ig-cell"><span className="ig-label">{dc.infoRace}</span><span className="ig-value">{meta.race}</span></div> : null}
+                {meta.faction ? (
+                  <div className="ig-cell">
+                    <span className="ig-label">{dc.infoFaction}</span>
+                    <span className="ig-value">
+                      {(() => {
+                        const f = factions.find((x) => x.slug === meta.faction);
+                        return f ? (
+                          <Link href={`/archives/${f.id}/`} className="badge badge-gold">
+                            {f.title}
                           </Link>
                         ) : (
-                          <span className="muted">（势力档案未发布或不存在的 slug：{meta.faction}）</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })()}
-              </tbody>
-            </table>
-            <FieldBlock label="个人背景及履历" text={meta.background || ""} refs={refs} id={row.id} />
-            <FieldBlock label="外貌等识别特征" text={meta.appearance || ""} refs={refs} id={row.id} />
-            <FieldBlock label="影响个体特殊谬误概述" text={meta.anomalyEffect || ""} refs={refs} id={row.id} />
-            <FieldBlock label="持有特殊谬误体或谬误科技情况" text={meta.holdings || ""} refs={refs} id={row.id} />
-
-            {meta.stats && Object.values(meta.stats).some(Boolean) ? (
-              <div className="field-block" style={{ borderLeftColor: "var(--ink)" }}>
-                <div className="f-label">工作能力评定（S 卓越 / A 优良 / B 均衡 / C 一般 / D 缺陷）</div>
-                <RadarChart stats={meta.stats} />
-                <table className="info-table" style={{ marginTop: 10, maxWidth: 480, marginLeft: "auto", marginRight: "auto" }}>
-                  <tbody>
-                    <tr>
-                      {SIX_DIMS.map((d) => (
-                        <th key={d} style={{ width: "16.6%", textAlign: "center" }}>{d}</th>
-                      ))}
-                    </tr>
-                    <tr>
-                      {SIX_DIMS.map((d) => (
-                        <td key={d} className="mono" style={{ textAlign: "center", fontWeight: 700, color: "var(--gold-dim)" }}>
-                          {meta.stats?.[d] || "—"}
-                        </td>
-                      ))}
-                    </tr>
-                  </tbody>
-                </table>
+                          <span className="ig-warn">{dc.factionMissing(meta.faction)}</span>
+                        );
+                      })()}
+                    </span>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
 
-            <h2 style={{ marginTop: 30, fontSize: 19 }}>关系线索</h2>
-            <PersonLocalNetwork personId={row.id} />
-            <Gallery items={meta.gallery || []} />
-          </>
-        ) : null}
+              <SecBlock n={nextSec()} name={dc.secBackground} text={meta.background || ""} refs={refs} id={row.id} />
+              <SecBlock n={nextSec()} name={dc.secAppearance} text={meta.appearance || ""} refs={refs} id={row.id} />
+              <SecBlock n={nextSec()} name={dc.secAnomalyEffect} text={meta.anomalyEffect || ""} refs={refs} id={row.id} />
+              <SecBlock n={nextSec()} name={dc.secHoldings} text={meta.holdings || ""} refs={refs} id={row.id} />
 
-        {row.type === "faction" ? (
-          <>
-            {row.logo_path ? (
-              <div style={{ textAlign: "center", margin: "10px 0 18px" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={asset(row.logo_path)} alt={row.title} style={{ width: 132, height: 132, objectFit: "contain" }} />
+              {meta.stats && Object.values(meta.stats).some(Boolean) ? (
+                <div className="stats-panel">
+                  <div className="sp-title">{dc.statsTitle}</div>
+                  <div className="sp-legend">{dc.statsLegend}</div>
+                  <div className="sp-flex">
+                    <RadarChart stats={meta.stats} />
+                    <table className="grade-table">
+                      <tbody>
+                        {SIX_DIMS.map((d) => (
+                          <tr key={d}>
+                            <td>{d}</td>
+                            <td className="g">{meta.stats?.[d] || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
+
+              <section className="sec-block">
+                <div className="sec-head">
+                  <span className="sec-code">{dc.secCode(nextSec())}</span>
+                  <span className="sec-name">{dc.relationTitle}</span>
+                  <span className="sec-rule" aria-hidden="true" />
+                </div>
+                <PersonLocalNetwork personId={row.id} />
+              </section>
+              <Gallery items={meta.gallery || []} />
+            </>
+          ) : null}
+
+          {row.type === "faction" ? (
+            <>
+              <div className="faction-emblem">
+                {row.logo_path ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={asset(row.logo_path)} alt={row.title} />
+                ) : null}
+                <div>
+                  {meta.slogan ? <p className="fe-slogan">「{meta.slogan}」</p> : null}
+                  {meta.altNames && meta.altNames.length ? (
+                    <div className="fe-names">ALT // {meta.altNames.join(" · ")}</div>
+                  ) : null}
+                </div>
               </div>
-            ) : null}
-            {meta.slogan ? (
-              <blockquote className="md" style={{ textAlign: "center", fontSize: 16, color: "var(--gold-dim)", border: "none", background: "none" }}>
-                「{meta.slogan}」
-              </blockquote>
-            ) : null}
-            <MdView>{linkifyMarkdown(toMd(row.body_md), refs, row.id)}</MdView>
-          </>
-        ) : null}
+              <div className="read-body">
+                <MdView>{linkifyMarkdown(toMd(row.body_md), refs, row.id)}</MdView>
+              </div>
+            </>
+          ) : null}
 
-        {row.type === "lore" || row.type === "cihai" ? (
-          <MdView>{linkifyMarkdown(toMd(row.body_md), refs, row.id)}</MdView>
-        ) : null}
+          {row.type === "lore" || row.type === "cihai" ? (
+            <div className="read-body">
+              <MdView>{linkifyMarkdown(toMd(row.body_md), refs, row.id)}</MdView>
+            </div>
+          ) : null}
 
-        <RelatedChronicles archiveId={row.id} />
-      </article>
+          {events.length ? <RelatedChronicles events={events} /> : null}
+        </div>
+
+        <aside className="dossier-side">
+          <div className="index-panel">
+            <div className="ip-head">{dc.indexTitle}</div>
+            <div className="ip-row">
+              <span className="ip-label">{dc.indexUnit}</span>
+              <span className="ip-value">{dc.indexUnitValue}</span>
+            </div>
+            <div className="ip-row">
+              <span className="ip-label">{dc.indexRevised}</span>
+              <span className="ip-value mono">{fmtDate(row.updated_at)}</span>
+            </div>
+            <div className="ip-row">
+              <span className="ip-label">{dc.indexStatus}</span>
+              <span className="ip-value">
+                <span className={`badge${row.status === "published" ? " badge-gold" : ""}`}>
+                  {row.status === "published" ? dc.statusPublished : dc.statusDraft}
+                </span>
+              </span>
+            </div>
+            <div className="ip-row">
+              <span className="ip-label">{dc.indexRelated}</span>
+              {relatedArchives.length ? (
+                <span className="ip-links">
+                  {relatedArchives.map((a) => (
+                    <Link key={a.id} href={`/archives/${a.id}/`}>
+                      {a.archive_no} · {a.title}
+                    </Link>
+                  ))}
+                </span>
+              ) : (
+                <span className="ip-value muted">{dc.indexRelatedEmpty}</span>
+              )}
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div className="action-bar">
+        <span className="ab-label">// ACTIONS</span>
+        <Link href="/archives/" className="btn">{dc.backToIndex}</Link>
+        <Link href={events.length ? `/chronicle/#${encodeURIComponent(events[0].slug)}` : "/chronicle/"} className="btn">
+          {dc.locateChronicle}
+        </Link>
+        <Link href="/random/" className="btn btn-gold">{dc.randomDossier}</Link>
+      </div>
     </div>
   );
 }
 
 // 相关历史事件：列出关联本档案的编年史事件，跳转 /chronicle 对应锚点
-function RelatedChronicles({ archiveId }: { archiveId: string }) {
-  const events = chroniclesForArchive(archiveId);
-  if (!events.length) return null;
+function RelatedChronicles({ events }: { events: { slug: string; date_label: string; body: string }[] }) {
+  const dc = SITE_COPY.detail;
   return (
-    <section style={{ marginTop: 36 }}>
-      <h2 style={{ fontSize: 19 }}>相关历史事件</h2>
-      <div className="card" style={{ padding: "6px 18px" }}>
-        {events.map((e) => {
-          const plain = e.body.replace(/[#>*`\-[\]()!]/g, "").replace(/\s+/g, "");
-          const excerpt = plain.length > 64 ? plain.slice(0, 64) + "…" : plain;
-          return (
-            <div key={e.slug} className="archive-row" style={{ gap: 14 }}>
-              <span className="archive-no" style={{ whiteSpace: "nowrap" }}>{e.date_label}</span>
-              <span className="t" style={{ fontWeight: 400, fontSize: 14.5 }}>
-                {excerpt}
-              </span>
-              <span className="meta">
-                <Link href={`/chronicle/#${encodeURIComponent(e.slug)}`}>查看 →</Link>
-              </span>
-            </div>
-          );
-        })}
+    <section className="rel-chron">
+      <div className="section-head">
+        <h2>{dc.relatedChronicleTitle}</h2>
       </div>
+      {events.map((e) => {
+        const plain = e.body.replace(/[#>*`\-[\]()!]/g, "").replace(/\s+/g, "");
+        const excerpt = plain.length > 64 ? plain.slice(0, 64) + "…" : plain;
+        return (
+          <div key={e.slug} className="rc-row">
+            <span className="rc-date">{e.date_label}</span>
+            <span className="rc-text">{excerpt}</span>
+            <span className="rc-go">
+              <Link href={`/chronicle/#${encodeURIComponent(e.slug)}`}>{dc.relatedChronicleView} →</Link>
+            </span>
+          </div>
+        );
+      })}
     </section>
   );
 }
@@ -231,7 +312,7 @@ function RelatedChronicles({ archiveId }: { archiveId: string }) {
 function PersonLocalNetwork({ personId }: { personId: string }) {
   const data = getLocalNetwork(personId);
   if (!data.edges.length) {
-    return <p className="muted">该个体暂无任何登记关系。关系线索可由管理员在后台维护。</p>;
+    return <p className="muted">{SITE_COPY.detail.relationEmpty}</p>;
   }
   return <NetworkBoard data={data} local />;
 }
