@@ -2,6 +2,9 @@
 // 设计约束：纯 CSS、无滤镜 / 无 clip-path / 无文字描边，保证 DOM 截图还原度。
 // 组件同时用于「测量」（一次渲染全部区块）与「出图」（按分页计划渲染每页）。
 
+"use client";
+
+import { useLayoutEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
@@ -19,11 +22,35 @@ const schema = {
   },
 };
 
+// 图片加载完成后内联写入确定的显示尺寸：量高与出图都以该尺寸为准，
+// 避免大图在离屏容器中的加载/解码时序影响排版，也保证 DOM 克隆时尺寸不丢失。
+function SizedImg({ src, alt = "", className, maxW, maxH }: { src: string; alt?: string; className?: string; maxW: number; maxH: number }) {
+  const ref = useRef<HTMLImageElement>(null);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const apply = () => {
+      const nw = el.naturalWidth;
+      const nh = el.naturalHeight;
+      if (!nw || !nh) return;
+      const s = Math.min(1, maxW / nw, maxH / nh);
+      const w = Math.round(nw * s * 10) / 10;
+      const h = Math.round(nh * s * 10) / 10;
+      setSize((p) => (p && Math.abs(p.w - w) < 0.5 && Math.abs(p.h - h) < 0.5 ? p : { w, h }));
+    };
+    if (el.complete && el.naturalWidth) apply();
+    el.addEventListener("load", apply);
+    return () => el.removeEventListener("load", apply);
+  }, [src, maxW, maxH]);
+  return <img ref={ref} src={src} alt={alt} className={className} style={size ? { width: size.w, height: size.h } : undefined} />;
+}
+
 function MdA({ href, children }: any) {
   return <a href={href ? asset(String(href)) : href}>{children}</a>;
 }
 function MdImg({ src, alt }: any) {
-  return <img src={src ? asset(String(src)) : src} alt={alt || ""} />;
+  return <SizedImg src={src ? asset(String(src)) : src} alt={alt || ""} maxW={928} maxH={880} />;
 }
 
 // 与详情页 MdView 相同的 Markdown 渲染（字号/行高由 .sc-md 覆盖）
@@ -87,7 +114,7 @@ export function BlockContent({
 }) {
   switch (block.kind) {
     case "avatar":
-      return <img className="sc-avatar" src={block.src} alt="" />;
+      return <SizedImg className="sc-avatar" src={block.src} alt="" maxW={380} maxH={460} />;
     case "info":
       return (
         <section className="sc-block" data-rblock>
@@ -116,7 +143,7 @@ export function BlockContent({
           <BlockHead label={block.label} cont={cont} />
           <div className="sc-radar-panel">
             <div className="sc-radar-legend">{block.legend}</div>
-            {radarImg ? <img className="sc-radar-img" src={radarImg} alt={block.label} /> : null}
+            {radarImg ? <img className="sc-radar-img" src={radarImg} alt={block.label} width={620} height={620} /> : null}
             <RadarGradeStrip stats={block.stats} />
           </div>
         </section>
@@ -128,7 +155,7 @@ export function BlockContent({
           <div className="sc-figs" data-rbody>
             {block.images.map((im, i) => (
               <figure className="sc-fig" key={i}>
-                <img src={im.src} alt={im.caption || ""} />
+                <SizedImg src={im.src} alt={im.caption || ""} maxW={928} maxH={720} />
                 {im.caption ? <figcaption>{im.caption}</figcaption> : null}
               </figure>
             ))}
@@ -196,7 +223,7 @@ function ShareFooter({ pageNo, total, qr }: { pageNo: number; total: number; qr:
     <footer className="sc-foot">
       <span className="sc-site">仰山档案 · 仰山市档案与公共安全部</span>
       <span className="sc-right">
-        {qr ? <img className="sc-qr" src={qr} alt="" /> : null}
+        {qr ? <img className="sc-qr" src={qr} alt="" width={84} height={84} /> : null}
         <span className="sc-page-no">
           {p(pageNo)} / {p(total)}
         </span>

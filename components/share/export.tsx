@@ -106,18 +106,25 @@ const nextTick = async () => {
   await raf();
 };
 
-async function waitForImages(root: HTMLElement) {
+// 等待容器内图片加载（单图超时后继续，避免大图/慢请求卡死导出）
+async function waitForImages(root: HTMLElement, timeoutMs = 15000) {
   const imgs = Array.from(root.querySelectorAll("img"));
   await Promise.all(
     imgs.map((img) => {
-      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
-      if (img.complete) return Promise.resolve(); // 已失败/无图，不阻塞
-      return new Promise<void>((res) => {
-        img.addEventListener("load", () => res(), { once: true });
-        img.addEventListener("error", () => res(), { once: true });
-      });
+      const i = img as HTMLImageElement;
+      if (i.complete) return Promise.resolve();
+      return Promise.race([
+        new Promise<void>((res) => {
+          i.addEventListener("load", () => res(), { once: true });
+          i.addEventListener("error", () => res(), { once: true });
+        }),
+        new Promise<void>((res) => setTimeout(res, timeoutMs)),
+      ]);
     })
   );
+  // 图片 onLoad 内联尺寸后会触发一次重渲染，等布局稳定
+  await raf();
+  await raf();
 }
 
 function outerH(el: Element): number {
@@ -328,15 +335,15 @@ export async function runShareExport(payload: SharePayload, onProgress?: Progres
     await waitForImages(measureMount);
     await document.fonts.ready;
     const measured = measureAll(measureMount, payload);
-    flushSync(() => measureRoot.unmount());
-    measureMount.remove();
 
-    // 4) 分页 → 渲染 → 溢出自检（溢出则收紧容量重排，最多 4 次）
+    // 4) 分页 → 渲染 → 溢出自检（溢出则收紧容量重排；最后一次渲染保留挂载，截图永远发生在已挂载 DOM 上）
     let cap = SC_CONTENT_H;
     let plan: PageItem[][] = [];
     let pagesRoot: Root | null = null;
     let pagesMount: HTMLElement | null = null;
     let pageEls: HTMLElement[] = [];
+    flushSync(() => measureRoot.unmount());
+    measureMount.remove();
 
     for (let attempt = 0; attempt < 4; attempt++) {
       onProgress?.("render", attempt + 1, 4);
@@ -367,7 +374,7 @@ export async function runShareExport(payload: SharePayload, onProgress?: Progres
       await document.fonts.ready;
       pageEls = Array.from(pagesMount.querySelectorAll(".sc-page")) as HTMLElement[];
       const overflow = maxPadOverflow(pagesMount);
-      if (overflow <= 1) break;
+      if (overflow <= 1 || attempt === 3) break;
       flushSync(() => pagesRoot!.unmount());
       pagesRoot = null;
       pagesMount.remove();
@@ -375,18 +382,43 @@ export async function runShareExport(payload: SharePayload, onProgress?: Progres
       cap -= overflow + 12;
     }
 
-    // 5) 逐页截图
+    // 保底：截图目标必须是已挂载节点，否则重新渲染一次
+    if (!pageEls.length || !pageEls[0].isConnected) {
+      const capFirst = SC_CONTENT_H - measured.headerOuter;
+      plan = paginate(measured.blocks, capFirst, cap);
+      pagesMount = document.createElement("div");
+      host.appendChild(pagesMount);
+      pagesRoot = createRoot(pagesMount);
+      flushSync(() => {
+        pagesRoot!.render(
+          <>
+            {plan.map((items, pi) => (
+              <SharePageView key={pi} payload={payload} radarImgs={radarImgs} items={items} pageNo={pi + 1} total={plan.length} qr={qr} />
+            ))}
+          </>
+        );
+      });
+      await nextTick();
+      await waitForImages(pagesMount);
+      await document.fonts.ready;
+      pageEls = Array.from(pagesMount.querySelectorAll(".sc-page")) as HTMLElement[];
+    }
+
+    // 5) 逐页截图（单页超时 60s，防止极端情况下卡死）
     const dataUrls: string[] = [];
     for (let i = 0; i < pageEls.length; i++) {
       onProgress?.("capture", i + 1, pageEls.length);
-      const url = await toPng(pageEls[i], {
-        width: SC_PAGE_W,
-        height: SC_PAGE_H,
-        pixelRatio: 1,
-        backgroundColor: "#121211",
-        skipFonts: true,
-        cacheBust: true,
-      });
+      const url = await Promise.race([
+        toPng(pageEls[i], {
+          width: SC_PAGE_W,
+          height: SC_PAGE_H,
+          pixelRatio: 1,
+          backgroundColor: "#121211",
+          skipFonts: true,
+          cacheBust: true,
+        }),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error("toPng timeout")), 60000)),
+      ]);
       dataUrls.push(url);
       await raf();
     }
