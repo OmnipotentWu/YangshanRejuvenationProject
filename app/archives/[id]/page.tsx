@@ -12,6 +12,8 @@ import MdView from "../../../components/MdView";
 import RadarChart from "../../../components/RadarChart";
 import NetworkBoard from "../../../components/NetworkBoard";
 import Gallery from "../../../components/Gallery";
+import ShareExportButton from "../../../components/share/ShareExportButton";
+import { buildSharePayload } from "../../../lib/share-blocks";
 
 // 模板段落文本规整为 Markdown（无空行的换行统一为段落间隔）
 function toMd(text: string): string {
@@ -103,7 +105,14 @@ export default async function ArchiveDetailPage({ params }: { params: Promise<{ 
             </>
           ) : null}
         </div>
-        <h1>{row.title}</h1>
+        {row.type === "person" || row.type === "anomaly" ? (
+          <div className="dossier-title-row">
+            <h1>{row.title}</h1>
+            <ShareExportButton payload={buildSharePayload(row, meta, refs, factions)} />
+          </div>
+        ) : (
+          <h1>{row.title}</h1>
+        )}
         {row.codename ? <div className="dossier-codename">{dc.codename} // {row.codename}</div> : null}
         <div className="d-meta">
           {dc.recordedBy(row.author_name || dc.recordedByName, fmtDate(row.updated_at))}
