@@ -106,6 +106,64 @@ const nextTick = async () => {
   await raf();
 };
 
+// 把单张图片转为 dataURL：超时/失败返回 null；超过 maxDim 的图等比降采样，
+// 既减小截图时的序列化与栅格化负担，也避免 html-to-image 内部再发网络请求卡死。
+async function fetchImageAsDataUrl(src: string, maxDim = 1600): Promise<string | null> {
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 20000);
+    const res = await fetch(src, { signal: ctl.signal, cache: "force-cache" });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    try {
+      const bmp = await createImageBitmap(blob);
+      if (Math.max(bmp.width, bmp.height) <= maxDim) {
+        const raw = await blobToDataUrl(blob);
+        bmp.close();
+        return raw;
+      }
+      const s = maxDim / Math.max(bmp.width, bmp.height);
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(bmp.width * s);
+      cv.height = Math.round(bmp.height * s);
+      cv.getContext("2d")!.drawImage(bmp, 0, 0, cv.width, cv.height);
+      bmp.close();
+      return cv.toDataURL(blob.type === "image/jpeg" ? "image/jpeg" : "image/png", 0.92);
+    } catch {
+      return await blobToDataUrl(blob);
+    }
+  } catch {
+    return null;
+  }
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(String(fr.result));
+    fr.onerror = () => rej(new Error("read fail"));
+    fr.readAsDataURL(blob);
+  });
+}
+
+// 截图前预内联：页面中所有外链 img 换成 dataURL（同 URL 只取一次），
+// 保证 toPng 克隆时零网络请求；取不到的图移除，优先保证导出完成。
+async function inlinePageImages(pagesHost: HTMLElement) {
+  const cache = new Map<string, Promise<string | null>>();
+  const imgs = Array.from(pagesHost.querySelectorAll("img")) as HTMLImageElement[];
+  await Promise.all(
+    imgs.map(async (img) => {
+      const src = img.getAttribute("src") || "";
+      if (!src || src.startsWith("data:")) return;
+      if (!cache.has(src)) cache.set(src, fetchImageAsDataUrl(src));
+      const dataUrl = await cache.get(src)!;
+      if (dataUrl) img.src = dataUrl;
+      else img.remove();
+    })
+  );
+}
+
 // 等待容器内图片加载（单图超时后继续，避免大图/慢请求卡死导出）
 async function waitForImages(root: HTMLElement, timeoutMs = 15000) {
   const imgs = Array.from(root.querySelectorAll("img"));
@@ -404,7 +462,14 @@ export async function runShareExport(payload: SharePayload, onProgress?: Progres
       pageEls = Array.from(pagesMount.querySelectorAll(".sc-page")) as HTMLElement[];
     }
 
-    // 5) 逐页截图（单页超时 60s，防止极端情况下卡死）
+    // 5) 截图前准备：图片全部预内联为 dataURL，toPng 内部零网络请求，杜绝请求挂起卡死
+    onProgress?.("prep", 0, 1);
+    if (!pagesMount) throw new Error("render failed");
+    await waitForImages(pagesMount);
+    await inlinePageImages(pagesMount);
+    await document.fonts.ready;
+
+    // 6) 逐页截图（单页超时 60s，防止极端情况下卡死）
     const dataUrls: string[] = [];
     for (let i = 0; i < pageEls.length; i++) {
       onProgress?.("capture", i + 1, pageEls.length);
@@ -415,7 +480,6 @@ export async function runShareExport(payload: SharePayload, onProgress?: Progres
           pixelRatio: 1,
           backgroundColor: "#121211",
           skipFonts: true,
-          cacheBust: true,
         }),
         new Promise<never>((_, rej) => setTimeout(() => rej(new Error("toPng timeout")), 60000)),
       ]);
@@ -423,7 +487,7 @@ export async function runShareExport(payload: SharePayload, onProgress?: Progres
       await raf();
     }
 
-    // 6) 卸载离屏容器并下载
+    // 7) 卸载离屏容器并下载
     if (pagesRoot) flushSync(() => pagesRoot!.unmount());
     pagesMount?.remove();
     await downloadAll(payload, dataUrls);
