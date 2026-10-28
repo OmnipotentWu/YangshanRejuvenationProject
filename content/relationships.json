@@ -65,6 +65,30 @@
       "target": "YS-P-008",
       "kind": "旧识",
       "note": "有口难言者与有口不言者"
+    },
+    {
+      "source": "YS-P-014",
+      "target": "YS-P-013",
+      "kind": "亲属",
+      "note": "父女"
+    },
+    {
+      "source": "YS-P-014",
+      "target": "YS-P-012",
+      "kind": "合作",
+      "note": "一次尚未实现的合作，预祝合作愉快。"
+    },
+    {
+      "source": "YS-P-014",
+      "target": "YS-P-004",
+      "kind": "合作",
+      "note": "一次尚未实现的合作，预祝合作愉快。"
+    },
+    {
+      "source": "YS-P-014",
+      "target": "YS-P-008",
+      "kind": "旧识",
+      "note": "父亲的旧识当然也是旧识。"
     }
   ]
 }
