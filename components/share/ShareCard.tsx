@@ -115,6 +115,20 @@ export function BlockContent({
   switch (block.kind) {
     case "avatar":
       return <SizedImg className="sc-avatar" src={block.src} alt="" maxW={380} maxH={460} />;
+    case "emblem":
+      return (
+        <section className="sc-block sc-emblem-block" data-rblock>
+          <div className="sc-emblem">
+            {block.src ? <SizedImg className="sc-emblem-logo" src={block.src} alt="" maxW={220} maxH={220} /> : null}
+            {block.slogan || block.altNames?.length ? (
+              <div className="sc-emblem-text">
+                {block.slogan ? <p className="sc-emblem-slogan">「{block.slogan}」</p> : null}
+                {block.altNames?.length ? <div className="sc-emblem-alt">ALT // {block.altNames.join(" · ")}</div> : null}
+              </div>
+            ) : null}
+          </div>
+        </section>
+      );
     case "info":
       return (
         <section className="sc-block" data-rblock>

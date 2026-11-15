@@ -845,6 +845,13 @@ mark { background: rgba(194, 155, 64, 0.35); color: var(--gold-hi); padding: 0 1
 /* 头像 */
 .sc-avatar { display: block; margin: 0 auto 42px; max-width: 380px; max-height: 460px; border: 1px solid rgba(242,242,240,0.2); }
 
+/* 势力徽标面板（徽标 + 口号 + 别名，整块不拆分） */
+.sc-emblem { display: flex; gap: 28px; align-items: center; border: 1px solid rgba(242,242,240,0.16); background: #121211; padding: 26px 30px; }
+.sc-emblem-logo { display: block; flex: none; }
+.sc-emblem-text { min-width: 0; }
+.sc-emblem-slogan { margin: 0; font-size: 28px; line-height: 1.6; color: #cfccc2; border-left: 4px solid #C29B40; padding-left: 14px; }
+.sc-emblem-alt { font-family: var(--font-mono); font-size: 18px; letter-spacing: 0.1em; color: #7d7a70; margin-top: 12px; }
+
 /* 测量容器：与成品内容栏同宽（928px），保证量高结果可直接用于分页 */
 .sc-measure { width: 1080px; }
 .sc-measure-col { width: 928px; }

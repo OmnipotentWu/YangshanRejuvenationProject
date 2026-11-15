@@ -107,6 +107,7 @@ export const SITE_COPY = {
     secHoldings: "持有特殊谬误体或谬误科技情况",
     statsTitle: "工作能力评定",
     statsLegend: "S 卓越 / A 优良 / B 均衡 / C 一般 / D 缺陷",
+    secBody: "正文",
     relationTitle: "关系线索",
     relationEmpty: "该个体暂无任何登记关系。关系线索可由管理员在后台维护。",
     galleryTitle: "图档",

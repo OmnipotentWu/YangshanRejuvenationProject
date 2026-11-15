@@ -105,14 +105,10 @@ export default async function ArchiveDetailPage({ params }: { params: Promise<{ 
             </>
           ) : null}
         </div>
-        {row.type === "person" || row.type === "anomaly" ? (
-          <div className="dossier-title-row">
-            <h1>{row.title}</h1>
-            <ShareExportButton payload={buildSharePayload(row, meta, refs, factions)} />
-          </div>
-        ) : (
+        <div className="dossier-title-row">
           <h1>{row.title}</h1>
-        )}
+          <ShareExportButton payload={buildSharePayload(row, meta, refs, factions)} />
+        </div>
         {row.codename ? <div className="dossier-codename">{dc.codename} // {row.codename}</div> : null}
         <div className="d-meta">
           {dc.recordedBy(row.author_name || dc.recordedByName, fmtDate(row.updated_at))}

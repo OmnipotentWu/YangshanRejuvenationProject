@@ -208,7 +208,7 @@ function measureAll(host: HTMLElement, payload: SharePayload): { headerOuter: nu
   const headerOuter = outerH(host.querySelector("[data-mh]") as Element);
   const blocks: MeasuredBlock[] = payload.blocks.map((b, i) => {
     const w = host.querySelector(`[data-mblock="${i}"]`) as Element;
-    const atomic = b.kind === "avatar" || b.kind === "radar";
+    const atomic = b.kind === "avatar" || b.kind === "radar" || b.kind === "emblem";
     const headEl = w.querySelector(".sc-bhead");
     const body = atomic ? null : bodyOf(w);
     const children = body ? Array.from(body.children).map((c) => ({ outer: outerH(c) })) : [];

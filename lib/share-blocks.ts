@@ -8,10 +8,11 @@ import { asset } from "./assets";
 import { fmtDate } from "./format";
 import { linkifyMarkdown, type LinkRef } from "./queries";
 import { SITE_COPY } from "./site-copy";
-import { TYPE_META, type Archive, type ArchiveMeta } from "./types";
+import { TYPE_META, type Archive, type ArchiveMeta, type ArchiveType } from "./types";
 
 export type ShareBlock =
   | { kind: "avatar"; src: string }
+  | { kind: "emblem"; src?: string; slogan?: string; altNames?: string[] }
   | { kind: "info"; rows: { k: string; v: string; warn?: boolean }[] }
   | { kind: "md"; sec: number; label: string; md: string }
   | { kind: "radar"; label: string; legend: string; stats: Record<string, string> }
@@ -19,7 +20,7 @@ export type ShareBlock =
 
 export interface SharePayload {
   id: string;
-  type: "person" | "anomaly";
+  type: ArchiveType;
   archiveNo: string; // 完整档号 YS-P-008
   typePrefix: string; // YS-P
   typeLabel: string; // 个体备案
@@ -105,6 +106,22 @@ export function buildSharePayload(
         images: images.map((g) => ({ src: asset(g.src), caption: g.caption })),
       });
     }
+  } else if (row.type === "faction") {
+    // 徽标区块：徽标 + 口号 + 别名（沿用详情页组合，整块不拆分）
+    if (row.logo_path || meta.slogan || (meta.altNames && meta.altNames.length)) {
+      blocks.push({
+        kind: "emblem",
+        src: row.logo_path ? asset(row.logo_path) : undefined,
+        slogan: meta.slogan || undefined,
+        altNames: meta.altNames && meta.altNames.length ? meta.altNames : undefined,
+      });
+    }
+    const body = mdBlock(dc.secBody, row.body_md);
+    if (body) blocks.push(body);
+  } else {
+    // lore 设定资料 / cihai 仰山辞海：正文
+    const body = mdBlock(dc.secBody, row.body_md);
+    if (body) blocks.push(body);
   }
 
   const badges: string[] = [];
@@ -114,7 +131,7 @@ export function buildSharePayload(
 
   return {
     id: row.id,
-    type: row.type as "person" | "anomaly",
+    type: row.type,
     archiveNo: row.archive_no,
     typePrefix: tm.noPrefix,
     typeLabel: tm.label,
