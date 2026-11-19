@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as d3 from "d3";
 import { asset } from "../lib/assets";
 import { SITE_COPY } from "../lib/site-copy";
+import { computeNetworkLayout, NetworkLayout } from "../lib/network-layout";
 
 interface PersonNode {
   id: string;
@@ -43,6 +44,7 @@ interface SimLink extends d3.SimulationLinkDatum<SimNode> {
 }
 
 const MEMBER_KIND = "__member__";
+const NONE_KEY = "__none__";
 
 // 7 种预置线型，按 effectiveKinds 声明顺序循环分配；
 // kinds.json 新增类型无需改代码，自动获得下一种线型。
@@ -68,17 +70,17 @@ function hashN(n: string | number) {
 }
 
 // 初始取景：按节点包围盒适配看板（留边距，不放大超过 100%）
-function computeFit(board: HTMLDivElement, nodes: SimNode[]): d3.ZoomTransform {
+function computeFit(
+  board: HTMLDivElement,
+  items: { x: number; y: number; hw: number; hh: number }[]
+): d3.ZoomTransform {
   const pad = 46;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const n of nodes) {
-    if (n.x === undefined || n.y === undefined) continue;
-    const hw = n.kind === "faction" ? 80 : 74;
-    const hh = n.kind === "faction" ? 92 : 108;
-    minX = Math.min(minX, n.x - hw);
-    maxX = Math.max(maxX, n.x + hw);
-    minY = Math.min(minY, n.y - hh);
-    maxY = Math.max(maxY, n.y + hh);
+  for (const n of items) {
+    minX = Math.min(minX, n.x - n.hw);
+    maxX = Math.max(maxX, n.x + n.hw);
+    minY = Math.min(minY, n.y - n.hh);
+    maxY = Math.max(maxY, n.y + n.hh);
   }
   if (!isFinite(minX) || maxX - minX <= 0 || maxY - minY <= 0) {
     return d3.zoomIdentity.translate(board.clientWidth / 2, board.clientHeight / 2);
@@ -99,7 +101,8 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
   const zoomRef = useRef<d3.ZoomBehavior<HTMLDivElement, unknown> | null>(null);
   const transformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
   const fitRef = useRef<d3.ZoomTransform | null>(null);
-  const [tick, setTick] = useState(0);
+  const [layout, setLayout] = useState<NetworkLayout | null>(null);
+  const [settling, setSettling] = useState(false);
   const [transform, setTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);
   const [mode, setMode] = useState<"person" | "mixed">("person");
   // 默认全部类型可见：含 kinds.json 声明与边数据里实际出现的类型
@@ -149,7 +152,7 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
     const nodeIds = new Set(nodes.map((n) => n.id));
     const ls: SimLink[] = [];
     for (const e of data.edges) {
-      // 防御：自环不产生无效布局；悬空端点数据层已过滤，这里再兜底
+      // 防御：自环不产生无效渲染；悬空端点数据层已过滤，这里再兜底
       if (e.source === e.target) continue;
       if (nodeIds.has(e.source) && nodeIds.has(e.target)) {
         ls.push({ source: e.source, target: e.target, kind: (e.kind || "").trim() });
@@ -173,11 +176,11 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
   const adjacency = useMemo(() => {
     const m = new Map<string, Set<string>>();
     for (const l of links) {
-      const s = l.source as SimNode, t = l.target as SimNode;
-      if (!m.has(s.id)) m.set(s.id, new Set());
-      if (!m.has(t.id)) m.set(t.id, new Set());
-      m.get(s.id)!.add(t.id);
-      m.get(t.id)!.add(s.id);
+      const s = l.source as string, t = l.target as string;
+      if (!m.has(s)) m.set(s, new Set());
+      if (!m.has(t)) m.set(t, new Set());
+      m.get(s)!.add(t);
+      m.get(t)!.add(s);
     }
     return m;
   }, [links]);
@@ -197,71 +200,27 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
     return new Set(nodes.filter((n) => n.title.includes(q) || (n.codename || "").includes(q)).map((n) => n.id));
   }, [nodes, query]);
 
-  useEffect(() => {
+  // 静态分组布局：坐标一次算定，拖拽只改单个节点的位置（粘性），无全场力场
+  useLayoutEffect(() => {
     const board = boardRef.current;
     const world = worldRef.current;
     if (!board || !world) return;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    // 矩形碰撞：卡片为 132×~190 矩形，圆形 collide 只能约束圆心距，
-    // 斜对角方向仍会重叠；改为每 tick 沿最小穿透轴全量分离，最后注册保证最终生效
-    const halfOf = (n: SimNode) =>
+    const computed = computeNetworkLayout(nodes, { local });
+    setLayout(computed);
+
+    const fitHalf = (n: SimNode) =>
       local
         ? n.kind === "faction"
-          ? { hw: 60, hh: 76 }
-          : { hw: 58, hh: 70 }
+          ? { hw: 64, hh: 80 }
+          : { hw: 60, hh: 74 }
         : n.kind === "faction"
-          ? { hw: 72, hh: 88 }
-          : { hw: 70, hh: 102 };
-    const rectCollide = () => {
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const a = nodes[i], b = nodes[j];
-          const ha = halfOf(a), hb = halfOf(b);
-          const dx = (b.x ?? 0) - (a.x ?? 0), dy = (b.y ?? 0) - (a.y ?? 0);
-          const ox = ha.hw + hb.hw - Math.abs(dx);
-          const oy = ha.hh + hb.hh - Math.abs(dy);
-          if (ox > 0 && oy > 0) {
-            if (ox < oy) {
-              const push = (ox / 2) * (dx >= 0 ? 1 : -1);
-              if (a.fx == null) a.x = (a.x ?? 0) - push;
-              if (b.fx == null) b.x = (b.x ?? 0) + push;
-            } else {
-              const push = (oy / 2) * (dy >= 0 ? 1 : -1);
-              if (a.fy == null) a.y = (a.y ?? 0) - push;
-              if (b.fy == null) b.y = (b.y ?? 0) + push;
-            }
-          }
-        }
-      }
-    };
-
-    const sim = d3
-      .forceSimulation(nodes)
-      .force(
-        "link",
-        d3.forceLink(links).id((d: any) => d.id).distance(local ? 110 : 190).strength(0.8)
-      )
-      .force("charge", d3.forceManyBody().strength(local ? -320 : -480))
-      .force("x", d3.forceX(0).strength(local ? 0.1 : 0.08))
-      .force("y", d3.forceY(0).strength(local ? 0.12 : 0.1))
-      .force("rect", rectCollide as any);;
-
-    // 先同步预演算让布局基本就位；初始取景推迟到首帧布局就绪后再计算并应用
-    //（挂载瞬间可能读到 0 尺寸，导致适配缩放被钳到最小值）
-    nodes.forEach((n, i) => {
-      const a = (i / Math.max(nodes.length, 1)) * Math.PI * 2;
-      if (n.x === undefined) n.x = Math.cos(a) * 160;
-      if (n.y === undefined) n.y = Math.sin(a) * 160;
-    });
-    for (let i = 0; i < (reduced ? 400 : 300); i++) sim.tick();
-
-    if (reduced) {
-      // 降级：静态渲染，不持续驱动
-      setTick((t) => t + 1);
-    } else {
-      sim.on("tick", () => setTick((t) => t + 1));
-    }
+          ? { hw: 80, hh: 92 }
+          : { hw: 74, hh: 108 };
+    const fitItems = () =>
+      nodes
+        .filter((n) => computed.pos.has(n.id))
+        .map((n) => ({ ...computed.pos.get(n.id)!, ...fitHalf(n) }));
 
     const zoom = d3
       .zoom<HTMLDivElement, unknown>()
@@ -280,7 +239,7 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
         raf = requestAnimationFrame(applyInitialFit);
         return;
       }
-      const initial = computeFit(board, nodes);
+      const initial = computeFit(board, fitItems());
       fitRef.current = initial;
       transformRef.current = initial;
       setTransform(initial);
@@ -290,19 +249,18 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
 
     const dragBehavior = d3
       .drag<HTMLDivElement, SimNode>()
-      .on("start", (ev, d) => {
+      .on("start", () => {
         dragMoved.current = false;
-        if (!ev.active) sim.alphaTarget(0.25).restart();
-        d.fx = d.x; d.fy = d.y;
       })
       .on("drag", (ev, d) => {
         dragMoved.current = true;
         const pt = transformRef.current.invert([ev.x, ev.y] as [number, number]);
-        d.fx = pt[0]; d.fy = pt[1];
-      })
-      .on("end", (ev, d) => {
-        if (!ev.active) sim.alphaTarget(0);
-        d.fx = null; d.fy = null;
+        setLayout((prev) => {
+          if (!prev) return prev;
+          const pos = new Map(prev.pos);
+          pos.set(d.id, { x: pt[0], y: pt[1] });
+          return { ...prev, pos };
+        });
       });
 
     const sel = d3.select(world).selectAll<HTMLDivElement, SimNode>("div.tac-node");
@@ -311,8 +269,8 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
 
     return () => {
       cancelAnimationFrame(raf);
-      sim.stop();
       zoomRef.current = null;
+      d3.select(board).on(".zoom", null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, links, local]);
@@ -343,15 +301,42 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
     const target = fitRef.current ?? d3.zoomIdentity.translate(board.clientWidth / 2, board.clientHeight / 2);
     d3.select(board).transition().duration(200).call(zoom.transform as any, target);
   }
+  // 重新计算分组布局并复位取景（手动拖乱后的恢复入口）
+  function relayout() {
+    const board = boardRef.current;
+    const zoom = zoomRef.current;
+    const computed = computeNetworkLayout(nodes, { local });
+    setLayout(computed);
+    setSettling(true);
+    window.setTimeout(() => setSettling(false), 420);
+    if (!board || !zoom) return;
+    const items = nodes
+      .filter((n) => computed.pos.has(n.id))
+      .map((n) => ({
+        ...computed.pos.get(n.id)!,
+        ...(local
+          ? n.kind === "faction"
+            ? { hw: 64, hh: 80 }
+            : { hw: 60, hh: 74 }
+          : n.kind === "faction"
+            ? { hw: 80, hh: 92 }
+            : { hw: 74, hh: 108 }),
+      }));
+    const target = computeFit(board, items);
+    fitRef.current = target;
+    d3.select(board).transition().duration(320).call(zoom.transform as any, target);
+  }
 
   const visibleLinks = links.filter((l) => l.member || (l.kind && activeKinds.has(l.kind)));
   const renderedCount = visibleLinks.filter((l) => !l.member).length;
   const activeKindCount = effectiveKinds.filter((k) => (kindCounts.get(k) || 0) > 0).length;
 
-  function edgePath(l: SimLink, i: number): string {
-    const s = l.source as SimNode, t = l.target as SimNode;
-    const mx = (s.x! + t.x!) / 2, my = (s.y! + t.y!) / 2;
-    const dx = t.x! - s.x!, dy = t.y! - s.y!;
+  function edgePath(l: SimLink, i: number): string | null {
+    if (!layout) return null;
+    const s = layout.pos.get(l.source as string), t = layout.pos.get(l.target as string);
+    if (!s || !t) return null;
+    const mx = (s.x + t.x) / 2, my = (s.y + t.y) / 2;
+    const dx = t.x - s.x, dy = t.y - s.y;
     const len = Math.hypot(dx, dy) || 1;
     const off = (hashN(i) % 44) - 22 || 18;
     const cx = mx - (dy / len) * off, cy = my + (dx / len) * off;
@@ -359,10 +344,12 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
   }
   // 标签定位：取边线中点；若中点被其它卡片遮挡，则沿边线向两端滑动，
   // 停在第一个不被遮挡的位置，保证标签既不刷脸也不消失
-  function labelPos(l: SimLink, i: number): { x: number; y: number } {
-    const s = l.source as SimNode, t = l.target as SimNode;
-    const mx = (s.x! + t.x!) / 2, my = (s.y! + t.y!) / 2;
-    const dx = t.x! - s.x!, dy = t.y! - s.y!;
+  function labelPos(l: SimLink, i: number): { x: number; y: number } | null {
+    if (!layout) return null;
+    const s = layout.pos.get(l.source as string), t = layout.pos.get(l.target as string);
+    if (!s || !t) return null;
+    const mx = (s.x + t.x) / 2, my = (s.y + t.y) / 2;
+    const dx = t.x - s.x, dy = t.y - s.y;
     const len = Math.hypot(dx, dy) || 1;
     const off = (hashN(i) % 44) - 22 || 18;
     const cx = mx - (dy / len) * off, cy = my + (dx / len) * off;
@@ -370,13 +357,15 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
     const hh = 8 + 4;
     const at = (u: number) => {
       const v = 1 - u;
-      return { x: v * v * s.x! + 2 * u * v * cx + u * u * t.x!, y: v * v * s.y! + 2 * u * v * cy + u * u * t.y! };
+      return { x: v * v * s.x + 2 * u * v * cx + u * u * t.x, y: v * v * s.y + 2 * u * v * cy + u * u * t.y };
     };
     const covered = (x: number, y: number) =>
       nodes.some((n) => {
-        if (n.id === s.id || n.id === t.id) return false;
+        if (n.id === l.source || n.id === l.target) return false;
+        const np = layout.pos.get(n.id);
+        if (!np) return false;
         const nh = n.kind === "faction" ? { hw: 72, hh: 88 } : { hw: 70, hh: 102 };
-        return Math.abs((n.x ?? 0) - x) < nh.hw + hw && Math.abs((n.y ?? 0) - y) < nh.hh + hh;
+        return Math.abs(np.x - x) < nh.hw + hw && Math.abs(np.y - y) < nh.hh + hh;
       });
     let best = 0.5;
     if (covered(at(0.5).x, at(0.5).y)) {
@@ -394,11 +383,12 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
 
   const litIds = hover !== null ? adjacency.get(hover) : null;
   const hoverNode = hover ? nodeById.get(hover) : undefined;
+  const hoverPos = hoverNode && layout ? layout.pos.get(hoverNode.id) : undefined;
   const hoverRels = hover
     ? visibleLinks
         .filter((l) => {
-          const s = l.source as SimNode, t = l.target as SimNode;
-          return s.id === hover || t.id === hover;
+          const s = l.source as string, t = l.target as string;
+          return s === hover || t === hover;
         })
         .slice(0, 6)
     : [];
@@ -449,22 +439,39 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
               transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.k})`,
             }}
           >
+            {/* 阵营区域底衬：先于边线渲染，跨阵营长边画在区域之上 */}
+            {layout ? (
+              <div className="tac-zones" aria-hidden="true">
+                {layout.zones.map((z) => (
+                  <div key={z.key} className="tac-zone" style={{ left: z.x, top: z.y, width: z.w, height: z.h }}>
+                    {z.hasFactionNode ? null : (
+                      <span className="tac-zone-label">
+                        {z.key === NONE_KEY ? nc.noFaction : (factionBySlug.get(z.key)?.title ?? z.key)}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
             <svg className="tac-board-svg" role="img" aria-label={nc.boardStrip(nodes.length, renderedCount, activeKindCount)}>
               <g>
                 {visibleLinks.map((l, i) => {
-                  const s = l.source as SimNode, t = l.target as SimNode;
+                  const s = nodeById.get(l.source as string), t = nodeById.get(l.target as string);
+                  if (!s || !t) return null;
                   const isLit = hover !== null && (s.id === hover || t.id === hover);
                   const isDim = hover !== null && !isLit && !l.member;
                   const st = l.member ? { dash: "4 4", width: 1.2 } : styleOf(l.kind);
-                  return (
+                  const d = edgePath(l, i);
+                  return d ? (
                     <path
                       key={i}
                       className={`thread ${isLit ? "lit" : ""} ${isDim ? "dim" : ""}`}
-                      d={edgePath(l, i)}
+                      d={d}
                       strokeDasharray={st.dash}
                       strokeWidth={st.width}
                     />
-                  );
+                  ) : null;
                 })}
               </g>
             </svg>
@@ -473,11 +480,12 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
             <svg className="tac-board-labels" aria-hidden="true">
               <g>
                 {visibleLinks.map((l, i) => {
-                  const s = l.source as SimNode, t = l.target as SimNode;
+                  const s = nodeById.get(l.source as string), t = nodeById.get(l.target as string);
+                  if (!s || !t) return null;
                   const isLit = hover !== null && (s.id === hover || t.id === hover);
                   const isDim = hover !== null && !isLit && !l.member;
                   const mid = labelPos(l, i);
-                  return !l.member && l.kind ? (
+                  return !l.member && l.kind && mid ? (
                     <g key={i} className={`thread-label ${isDim ? "dim" : ""} ${isLit ? "lit" : ""}`} transform={`translate(${mid.x}, ${mid.y})`}>
                       <rect x={-l.kind.length * 5.6 - 6} y={-8} width={l.kind.length * 11.2 + 12} height={16} />
                       <text textAnchor="middle" dy={3.5}>{l.kind}</text>
@@ -486,79 +494,84 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
                 })}
               </g>
             </svg>
-            {nodes.map((n) => {
-              const dimmed = hover !== null && n.id !== hover && !litIds?.has(n.id);
-              const hit = searchHits?.has(n.id);
-              const f = n.faction ? factionBySlug.get(n.faction) : undefined;
-              return (
-                <div
-                  key={n.id}
-                  className={`tac-node ${n.kind === "faction" ? "faction-node" : ""} ${dimmed ? "dimmed" : ""} ${n.id === hover ? "lit" : ""}`}
-                  style={{
-                    left: n.x ?? 0,
-                    top: n.y ?? 0,
-                    zIndex: n.id === hover ? 20 : hit ? 15 : 1,
-                    outline: hit ? "2px solid var(--gold)" : undefined,
-                  }}
-                  role="link"
-                  tabIndex={0}
-                  aria-label={`${n.title} ${n.id}`}
-                  onMouseEnter={() => setHover(n.id)}
-                  onMouseLeave={() => setHover(null)}
-                  onFocus={() => setHover(n.id)}
-                  onBlur={() => setHover(null)}
-                  onClick={() => nodeClick(n.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      nodeClick(n.id);
-                    }
-                  }}
-                >
-                  <div className="tn-no">
-                    <span>{n.kind === "faction" ? "YS-F" : n.id}</span>
-                    <span>{n.kind === "faction" ? "FACTION" : ""}</span>
-                  </div>
-                  <div className="tn-photo">
-                    {n.kind === "faction" && n.logo ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img className="fn-logo" src={asset(n.logo)} alt={n.title} />
-                    ) : n.kind === "person" && n.avatar ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={asset(n.avatar)} alt={n.title} />
-                    ) : (
-                      <>
-                        <svg className="silhouette" viewBox="0 0 64 80" aria-hidden="true">
-                          <ellipse cx="32" cy="22" rx="14" ry="15" fill="rgba(194,155,64,0.45)" />
-                          <path d="M10 78 C12 52 24 46 32 46 C40 46 52 52 54 78 Z" fill="rgba(194,155,64,0.45)" />
-                        </svg>
-                        {n.codename ? <span className="codename">{n.codename}</span> : null}
-                      </>
-                    )}
-                  </div>
-                  <div className="tn-name">{n.title}</div>
-                  {n.kind === "person" ? (
-                    <div className="tn-faction">
-                      {f?.logo_path ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={asset(f.logo_path)} alt="" aria-hidden="true" />
-                      ) : null}
-                      <span className="mono">{n.faction ? (f?.title ?? n.faction) : nc.noFaction}</span>
+            {layout
+              ? nodes.map((n) => {
+                  const p = layout.pos.get(n.id);
+                  if (!p) return null;
+                  const dimmed = hover !== null && n.id !== hover && !litIds?.has(n.id);
+                  const hit = searchHits?.has(n.id);
+                  const f = n.faction ? factionBySlug.get(n.faction) : undefined;
+                  return (
+                    <div
+                      key={n.id}
+                      className={`tac-node ${n.kind === "faction" ? "faction-node" : ""} ${dimmed ? "dimmed" : ""} ${n.id === hover ? "lit" : ""}`}
+                      style={{
+                        left: p.x,
+                        top: p.y,
+                        zIndex: n.id === hover ? 20 : hit ? 15 : 1,
+                        outline: hit ? "2px solid var(--gold)" : undefined,
+                        transition: settling ? "left 340ms ease, top 340ms ease" : undefined,
+                      }}
+                      role="link"
+                      tabIndex={0}
+                      aria-label={`${n.title} ${n.id}`}
+                      onMouseEnter={() => setHover(n.id)}
+                      onMouseLeave={() => setHover(null)}
+                      onFocus={() => setHover(n.id)}
+                      onBlur={() => setHover(null)}
+                      onClick={() => nodeClick(n.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          nodeClick(n.id);
+                        }
+                      }}
+                    >
+                      <div className="tn-no">
+                        <span>{n.kind === "faction" ? "YS-F" : n.id}</span>
+                        <span>{n.kind === "faction" ? "FACTION" : ""}</span>
+                      </div>
+                      <div className="tn-photo">
+                        {n.kind === "faction" && n.logo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img className="fn-logo" src={asset(n.logo)} alt={n.title} />
+                        ) : n.kind === "person" && n.avatar ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={asset(n.avatar)} alt={n.title} />
+                        ) : (
+                          <>
+                            <svg className="silhouette" viewBox="0 0 64 80" aria-hidden="true">
+                              <ellipse cx="32" cy="22" rx="14" ry="15" fill="rgba(194,155,64,0.45)" />
+                              <path d="M10 78 C12 52 24 46 32 46 C40 46 52 52 54 78 Z" fill="rgba(194,155,64,0.45)" />
+                            </svg>
+                            {n.codename ? <span className="codename">{n.codename}</span> : null}
+                          </>
+                        )}
+                      </div>
+                      <div className="tn-name">{n.title}</div>
+                      {n.kind === "person" ? (
+                        <div className="tn-faction">
+                          {f?.logo_path ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={asset(f.logo_path)} alt="" aria-hidden="true" />
+                          ) : null}
+                          <span className="mono">{n.faction ? (f?.title ?? n.faction) : nc.noFaction}</span>
+                        </div>
+                      ) : (
+                        <div className="tn-faction"><span className="mono">{nc.archiveNo(n.id)}</span></div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="tn-faction"><span className="mono">{nc.archiveNo(n.id)}</span></div>
-                  )}
-                </div>
-              );
-            })}
+                  );
+                })
+              : null}
           </div>
 
-          {hoverNode && hoverNode.x !== undefined && hoverNode.y !== undefined ? (
+          {hoverNode && hoverPos ? (
             <div
               className="tac-tooltip"
               style={{
-                left: Math.min(Math.max(transform.x + hoverNode.x * transform.k + 74, 12), Math.max((boardRef.current?.clientWidth || 400) - 236, 12)),
-                top: Math.min(Math.max(transform.y + hoverNode.y * transform.k - 40, 12), Math.max((boardRef.current?.clientHeight || 400) - 160, 12)),
+                left: Math.min(Math.max(transform.x + hoverPos.x * transform.k + 74, 12), Math.max((boardRef.current?.clientWidth || 400) - 236, 12)),
+                top: Math.min(Math.max(transform.y + hoverPos.y * transform.k - 40, 12), Math.max((boardRef.current?.clientHeight || 400) - 160, 12)),
               }}
             >
               <div className="tt-no">{hoverNode.id}</div>
@@ -571,12 +584,12 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
               {hoverRels.length ? (
                 <div className="tt-rel">
                   {hoverRels.map((l, i) => {
-                    const s = l.source as SimNode, t = l.target as SimNode;
-                    const other = s.id === hoverNode.id ? t : s;
+                    const otherId = l.source === hoverNode.id ? (l.target as string) : (l.source as string);
+                    const other = nodeById.get(otherId);
                     const note = (l as any).note as string | undefined;
                     return (
                       <div key={i}>
-                        <span className="mono">{l.member ? "MEMBER" : l.kind || "—"}</span> {other.title}
+                        <span className="mono">{l.member ? "MEMBER" : l.kind || "—"}</span> {other?.title ?? otherId}
                         {note ? ` — ${note.length > 42 ? note.slice(0, 42) + "…" : note}` : ""}
                       </div>
                     );
@@ -590,6 +603,7 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
             <button type="button" onClick={() => zoomBy(1.35)} aria-label={nc.zoomIn} title={nc.zoomIn}>+</button>
             <button type="button" onClick={() => zoomBy(1 / 1.35)} aria-label={nc.zoomOut} title={nc.zoomOut}>−</button>
             <button type="button" onClick={zoomReset} aria-label={nc.zoomReset} title={nc.zoomReset}>⟲</button>
+            <button type="button" onClick={relayout} aria-label={nc.relayout} title={nc.relayout}>▦</button>
           </div>
         </div>
       </div>
@@ -627,8 +641,6 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
           })}
         </div>
       ) : null}
-
-      <span style={{ display: "none" }}>{tick}</span>
     </div>
   );
 }

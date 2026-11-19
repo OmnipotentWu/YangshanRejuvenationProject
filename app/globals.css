@@ -591,6 +591,20 @@ mark { background: rgba(194, 155, 64, 0.35); color: var(--gold-hi); padding: 0 1
 .tac-frame .tf-b::before { left: -2px; bottom: -2px; border-right: none; border-top: none; }
 .tac-frame .tf-b::after { right: -2px; bottom: -2px; border-left: none; border-top: none; }
 
+/* 阵营区域底衬：拖拽/缩放时随世界层移动，跨阵营边绘制于其上 */
+.tac-zones { position: absolute; inset: 0; pointer-events: none; }
+.tac-zone {
+  position: absolute; border: 1px dashed rgba(194, 155, 64, 0.3);
+  background: rgba(194, 155, 64, 0.045);
+}
+.tac-zone-label {
+  position: absolute; left: 10px; top: 9px; padding: 1px 8px;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.22em;
+  color: rgba(194, 155, 64, 0.78); background: var(--rail-bg);
+  border: 1px solid rgba(194, 155, 64, 0.3);
+}
+.local-board .tac-zone-label { font-size: 9px; left: 8px; top: 7px; }
+
 .thread { stroke: rgba(194, 155, 64, 0.55); stroke-width: 1.2; fill: none; opacity: 0.9; transition: opacity 180ms ease, stroke 180ms ease; }
 .thread.dim { opacity: 0.1; }
 .thread.lit { stroke: var(--gold-hi); stroke-width: 2; opacity: 1; }

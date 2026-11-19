@@ -161,6 +161,7 @@ export const SITE_COPY = {
     zoomIn: "放大",
     zoomOut: "缩小",
     zoomReset: "重置视图",
+    relayout: "整理布局",
   },
 
   search: {
