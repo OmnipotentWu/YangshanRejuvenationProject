@@ -357,14 +357,39 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
     const cx = mx - (dy / len) * off, cy = my + (dx / len) * off;
     return `M ${s.x} ${s.y} Q ${cx} ${cy} ${t.x} ${t.y}`;
   }
-  // 二次贝塞尔 t=0.5 处的中点（标签定位）
-  function edgeMid(l: SimLink, i: number): { x: number; y: number } {
+  // 标签定位：取边线中点；若中点被其它卡片遮挡，则沿边线向两端滑动，
+  // 停在第一个不被遮挡的位置，保证标签既不刷脸也不消失
+  function labelPos(l: SimLink, i: number): { x: number; y: number } {
     const s = l.source as SimNode, t = l.target as SimNode;
-    const parts = edgePath(l, i).split(" ");
-    const x0 = parseFloat(parts[1]), y0 = parseFloat(parts[2]);
-    const cx = parseFloat(parts[4]), cy = parseFloat(parts[5]);
-    const x1 = parseFloat(parts[6]), y1 = parseFloat(parts[7]);
-    return { x: 0.25 * x0 + 0.5 * cx + 0.25 * x1, y: 0.25 * y0 + 0.5 * cy + 0.25 * y1 };
+    const mx = (s.x! + t.x!) / 2, my = (s.y! + t.y!) / 2;
+    const dx = t.x! - s.x!, dy = t.y! - s.y!;
+    const len = Math.hypot(dx, dy) || 1;
+    const off = (hashN(i) % 44) - 22 || 18;
+    const cx = mx - (dy / len) * off, cy = my + (dx / len) * off;
+    const hw = (l.kind?.length ?? 0) * 5.6 + 6 + 4;
+    const hh = 8 + 4;
+    const at = (u: number) => {
+      const v = 1 - u;
+      return { x: v * v * s.x! + 2 * u * v * cx + u * u * t.x!, y: v * v * s.y! + 2 * u * v * cy + u * u * t.y! };
+    };
+    const covered = (x: number, y: number) =>
+      nodes.some((n) => {
+        if (n.id === s.id || n.id === t.id) return false;
+        const nh = n.kind === "faction" ? { hw: 72, hh: 88 } : { hw: 70, hh: 102 };
+        return Math.abs((n.x ?? 0) - x) < nh.hw + hw && Math.abs((n.y ?? 0) - y) < nh.hh + hh;
+      });
+    let best = 0.5;
+    if (covered(at(0.5).x, at(0.5).y)) {
+      outer: for (let k = 1; k <= 10; k++) {
+        const d = k * 0.05;
+        for (const u of [0.5 + d, 0.5 - d]) {
+          if (u < 0.05 || u > 0.95) continue;
+          const p = at(u);
+          if (!covered(p.x, p.y)) { best = u; break outer; }
+        }
+      }
+    }
+    return at(best);
   }
 
   const litIds = hover !== null ? adjacency.get(hover) : null;
@@ -443,6 +468,24 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
                 })}
               </g>
             </svg>
+
+            {/* 关系标签独立成层（位于卡片之下），沿边线自动避让卡片 */}
+            <svg className="tac-board-labels" aria-hidden="true">
+              <g>
+                {visibleLinks.map((l, i) => {
+                  const s = l.source as SimNode, t = l.target as SimNode;
+                  const isLit = hover !== null && (s.id === hover || t.id === hover);
+                  const isDim = hover !== null && !isLit && !l.member;
+                  const mid = labelPos(l, i);
+                  return !l.member && l.kind ? (
+                    <g key={i} className={`thread-label ${isDim ? "dim" : ""} ${isLit ? "lit" : ""}`} transform={`translate(${mid.x}, ${mid.y})`}>
+                      <rect x={-l.kind.length * 5.6 - 6} y={-8} width={l.kind.length * 11.2 + 12} height={16} />
+                      <text textAnchor="middle" dy={3.5}>{l.kind}</text>
+                    </g>
+                  ) : null;
+                })}
+              </g>
+            </svg>
             {nodes.map((n) => {
               const dimmed = hover !== null && n.id !== hover && !litIds?.has(n.id);
               const hit = searchHits?.has(n.id);
@@ -508,24 +551,6 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
                 </div>
               );
             })}
-
-            {/* 关系标签独立成层，浮在节点卡片之上，避免被遮挡 */}
-            <svg className="tac-board-labels" aria-hidden="true">
-              <g>
-                {visibleLinks.map((l, i) => {
-                  const s = l.source as SimNode, t = l.target as SimNode;
-                  const isLit = hover !== null && (s.id === hover || t.id === hover);
-                  const isDim = hover !== null && !isLit && !l.member;
-                  const mid = edgeMid(l, i);
-                  return !l.member && l.kind ? (
-                    <g key={i} className={`thread-label ${isDim ? "dim" : ""} ${isLit ? "lit" : ""}`} transform={`translate(${mid.x}, ${mid.y})`}>
-                      <rect x={-l.kind.length * 5.6 - 6} y={-8} width={l.kind.length * 11.2 + 12} height={16} />
-                      <text textAnchor="middle" dy={3.5}>{l.kind}</text>
-                    </g>
-                  ) : null;
-                })}
-              </g>
-            </svg>
           </div>
 
           {hoverNode && hoverNode.x !== undefined && hoverNode.y !== undefined ? (
