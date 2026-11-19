@@ -67,6 +67,30 @@ function hashN(n: string | number) {
   return Math.abs(h);
 }
 
+// 初始取景：按节点包围盒适配看板（留边距，不放大超过 100%）
+function computeFit(board: HTMLDivElement, nodes: SimNode[]): d3.ZoomTransform {
+  const pad = 46;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const n of nodes) {
+    if (n.x === undefined || n.y === undefined) continue;
+    const hw = n.kind === "faction" ? 80 : 74;
+    const hh = n.kind === "faction" ? 92 : 108;
+    minX = Math.min(minX, n.x - hw);
+    maxX = Math.max(maxX, n.x + hw);
+    minY = Math.min(minY, n.y - hh);
+    maxY = Math.max(maxY, n.y + hh);
+  }
+  if (!isFinite(minX) || maxX - minX <= 0 || maxY - minY <= 0) {
+    return d3.zoomIdentity.translate(board.clientWidth / 2, board.clientHeight / 2);
+  }
+  const w = maxX - minX;
+  const h = maxY - minY;
+  const k = Math.max(0.35, Math.min((board.clientWidth - pad * 2) / w, (board.clientHeight - pad * 2) / h, 1));
+  const tx = (board.clientWidth - w * k) / 2 - minX * k;
+  const ty = (board.clientHeight - h * k) / 2 - minY * k;
+  return d3.zoomIdentity.translate(tx, ty).scale(k);
+}
+
 export default function NetworkBoard({ data, local = false }: { data: BoardData; local?: boolean }) {
   const router = useRouter();
   const nc = SITE_COPY.network;
@@ -74,6 +98,7 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
   const worldRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef<d3.ZoomBehavior<HTMLDivElement, unknown> | null>(null);
   const transformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
+  const fitRef = useRef<d3.ZoomTransform | null>(null);
   const [tick, setTick] = useState(0);
   const [transform, setTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);
   const [mode, setMode] = useState<"person" | "mixed">("person");
@@ -178,36 +203,63 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
     if (!board || !world) return;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    const initial = d3.zoomIdentity.translate(board.clientWidth / 2, board.clientHeight / 2);
-    transformRef.current = initial;
-    setTransform(initial);
+    // 矩形碰撞：卡片为 132×~190 矩形，圆形 collide 只能约束圆心距，
+    // 斜对角方向仍会重叠；改为每 tick 沿最小穿透轴全量分离，最后注册保证最终生效
+    const halfOf = (n: SimNode) =>
+      local
+        ? n.kind === "faction"
+          ? { hw: 60, hh: 76 }
+          : { hw: 58, hh: 70 }
+        : n.kind === "faction"
+          ? { hw: 72, hh: 88 }
+          : { hw: 70, hh: 102 };
+    const rectCollide = () => {
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i], b = nodes[j];
+          const ha = halfOf(a), hb = halfOf(b);
+          const dx = (b.x ?? 0) - (a.x ?? 0), dy = (b.y ?? 0) - (a.y ?? 0);
+          const ox = ha.hw + hb.hw - Math.abs(dx);
+          const oy = ha.hh + hb.hh - Math.abs(dy);
+          if (ox > 0 && oy > 0) {
+            if (ox < oy) {
+              const push = (ox / 2) * (dx >= 0 ? 1 : -1);
+              if (a.fx == null) a.x = (a.x ?? 0) - push;
+              if (b.fx == null) b.x = (b.x ?? 0) + push;
+            } else {
+              const push = (oy / 2) * (dy >= 0 ? 1 : -1);
+              if (a.fy == null) a.y = (a.y ?? 0) - push;
+              if (b.fy == null) b.y = (b.y ?? 0) + push;
+            }
+          }
+        }
+      }
+    };
 
     const sim = d3
       .forceSimulation(nodes)
       .force(
         "link",
-        d3.forceLink(links).id((d: any) => d.id).distance(local ? 110 : 150).strength(0.8)
+        d3.forceLink(links).id((d: any) => d.id).distance(local ? 110 : 190).strength(0.8)
       )
       .force("charge", d3.forceManyBody().strength(local ? -320 : -480))
-      .force("collide", d3.forceCollide(local ? 62 : 84))
-      .force("x", d3.forceX(0).strength(0.12))
-      .force("y", d3.forceY(0).strength(0.14));;
+      .force("x", d3.forceX(0).strength(local ? 0.1 : 0.08))
+      .force("y", d3.forceY(0).strength(local ? 0.12 : 0.1))
+      .force("rect", rectCollide as any);;
+
+    // 先同步预演算让布局基本就位；初始取景推迟到首帧布局就绪后再计算并应用
+    //（挂载瞬间可能读到 0 尺寸，导致适配缩放被钳到最小值）
+    nodes.forEach((n, i) => {
+      const a = (i / Math.max(nodes.length, 1)) * Math.PI * 2;
+      if (n.x === undefined) n.x = Math.cos(a) * 160;
+      if (n.y === undefined) n.y = Math.sin(a) * 160;
+    });
+    for (let i = 0; i < (reduced ? 400 : 300); i++) sim.tick();
 
     if (reduced) {
-      // 降级：同步预演算后直接静态渲染，不持续驱动
-      nodes.forEach((n, i) => {
-        const a = (i / Math.max(nodes.length, 1)) * Math.PI * 2;
-        if (n.x === undefined) n.x = Math.cos(a) * 160;
-        if (n.y === undefined) n.y = Math.sin(a) * 160;
-      });
-      for (let i = 0; i < 250; i++) sim.tick();
+      // 降级：静态渲染，不持续驱动
       setTick((t) => t + 1);
     } else {
-      nodes.forEach((n, i) => {
-        const a = (i / Math.max(nodes.length, 1)) * Math.PI * 2;
-        if (n.x === undefined) n.x = Math.cos(a) * 160;
-        if (n.y === undefined) n.y = Math.sin(a) * 160;
-      });
       sim.on("tick", () => setTick((t) => t + 1));
     }
 
@@ -220,7 +272,21 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
       });
     zoomRef.current = zoom;
     d3.select(board).call(zoom as any);
-    d3.select(board).call(zoom.transform as any, initial);
+
+    let raf = 0;
+    let attempts = 0;
+    const applyInitialFit = () => {
+      if (board.clientWidth === 0 && attempts++ < 90) {
+        raf = requestAnimationFrame(applyInitialFit);
+        return;
+      }
+      const initial = computeFit(board, nodes);
+      fitRef.current = initial;
+      transformRef.current = initial;
+      setTransform(initial);
+      d3.select(board).call(zoom.transform as any, initial);
+    };
+    raf = requestAnimationFrame(applyInitialFit);
 
     const dragBehavior = d3
       .drag<HTMLDivElement, SimNode>()
@@ -244,6 +310,7 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
     sel.call(dragBehavior as any);
 
     return () => {
+      cancelAnimationFrame(raf);
       sim.stop();
       zoomRef.current = null;
     };
@@ -273,8 +340,8 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
     const board = boardRef.current;
     const zoom = zoomRef.current;
     if (!board || !zoom) return;
-    const initial = d3.zoomIdentity.translate(board.clientWidth / 2, board.clientHeight / 2);
-    d3.select(board).transition().duration(200).call(zoom.transform as any, initial);
+    const target = fitRef.current ?? d3.zoomIdentity.translate(board.clientWidth / 2, board.clientHeight / 2);
+    d3.select(board).transition().duration(200).call(zoom.transform as any, target);
   }
 
   const visibleLinks = links.filter((l) => l.member || (l.kind && activeKinds.has(l.kind)));
@@ -364,22 +431,14 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
                   const isLit = hover !== null && (s.id === hover || t.id === hover);
                   const isDim = hover !== null && !isLit && !l.member;
                   const st = l.member ? { dash: "4 4", width: 1.2 } : styleOf(l.kind);
-                  const mid = edgeMid(l, i);
                   return (
-                    <g key={i}>
-                      <path
-                        className={`thread ${isLit ? "lit" : ""} ${isDim ? "dim" : ""}`}
-                        d={edgePath(l, i)}
-                        strokeDasharray={st.dash}
-                        strokeWidth={st.width}
-                      />
-                      {!l.member && l.kind ? (
-                        <g className={`thread-label ${isDim ? "dim" : ""} ${isLit ? "lit" : ""}`} transform={`translate(${mid.x}, ${mid.y})`}>
-                          <rect x={-l.kind.length * 5.6 - 6} y={-8} width={l.kind.length * 11.2 + 12} height={16} />
-                          <text textAnchor="middle" dy={3.5}>{l.kind}</text>
-                        </g>
-                      ) : null}
-                    </g>
+                    <path
+                      key={i}
+                      className={`thread ${isLit ? "lit" : ""} ${isDim ? "dim" : ""}`}
+                      d={edgePath(l, i)}
+                      strokeDasharray={st.dash}
+                      strokeWidth={st.width}
+                    />
                   );
                 })}
               </g>
@@ -449,6 +508,24 @@ export default function NetworkBoard({ data, local = false }: { data: BoardData;
                 </div>
               );
             })}
+
+            {/* 关系标签独立成层，浮在节点卡片之上，避免被遮挡 */}
+            <svg className="tac-board-labels" aria-hidden="true">
+              <g>
+                {visibleLinks.map((l, i) => {
+                  const s = l.source as SimNode, t = l.target as SimNode;
+                  const isLit = hover !== null && (s.id === hover || t.id === hover);
+                  const isDim = hover !== null && !isLit && !l.member;
+                  const mid = edgeMid(l, i);
+                  return !l.member && l.kind ? (
+                    <g key={i} className={`thread-label ${isDim ? "dim" : ""} ${isLit ? "lit" : ""}`} transform={`translate(${mid.x}, ${mid.y})`}>
+                      <rect x={-l.kind.length * 5.6 - 6} y={-8} width={l.kind.length * 11.2 + 12} height={16} />
+                      <text textAnchor="middle" dy={3.5}>{l.kind}</text>
+                    </g>
+                  ) : null;
+                })}
+              </g>
+            </svg>
           </div>
 
           {hoverNode && hoverNode.x !== undefined && hoverNode.y !== undefined ? (

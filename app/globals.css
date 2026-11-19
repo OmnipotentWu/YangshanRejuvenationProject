@@ -580,6 +580,7 @@ mark { background: rgba(194, 155, 64, 0.35); color: var(--gold-hi); padding: 0 1
 .tac-board { position: relative; width: 100%; height: 660px; cursor: grab; background: var(--rail-bg); }
 .tac-board:active { cursor: grabbing; }
 .tac-board-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.tac-board-labels { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; z-index: 10; pointer-events: none; }
 .tac-frame { position: absolute; inset: 10px; border: 1px solid rgba(194, 155, 64, 0.28); pointer-events: none; z-index: 5; }
 .tac-frame::before, .tac-frame::after,
 .tac-frame .tf-b::before, .tac-frame .tf-b::after {
@@ -596,7 +597,7 @@ mark { background: rgba(194, 155, 64, 0.35); color: var(--gold-hi); padding: 0 1
 .thread-label { pointer-events: none; }
 .thread-label rect { fill: var(--rail-bg); stroke: rgba(194, 155, 64, 0.55); stroke-width: 0.8; }
 .thread-label text { font-size: 10px; fill: var(--gold); font-family: var(--font-mono); letter-spacing: 0.1em; }
-.thread.lit + .thread-label rect, .thread-label.lit rect { stroke: var(--gold-hi); }
+.thread-label.lit rect { stroke: var(--gold-hi); }
 .thread-label.lit text { fill: var(--gold-hi); }
 
 /* 档案卡节点 */
@@ -610,10 +611,10 @@ mark { background: rgba(194, 155, 64, 0.35); color: var(--gold-hi); padding: 0 1
 .tac-node.dimmed { opacity: 0.18; }
 .tac-node .tn-no { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; color: var(--gold); padding: 5px 8px 0; display: flex; justify-content: space-between; }
 .tac-node .tn-photo {
-  margin: 5px 8px 0; height: 78px; background: var(--rail-bg); display: flex; align-items: center; justify-content: center;
+  margin: 5px 8px 0; height: 116px; background: var(--rail-bg); display: flex; align-items: center; justify-content: center;
   overflow: hidden; position: relative; border: 1px solid var(--line);
 }
-.tac-node .tn-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tac-node .tn-photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 15%; display: block; }
 .tac-node .tn-photo .silhouette { width: 40px; height: 50px; opacity: 0.9; }
 .tac-node .tn-photo .codename {
   position: absolute; bottom: 2px; right: 4px; color: var(--gold-hi); font-family: var(--font-mono);
@@ -627,7 +628,7 @@ mark { background: rgba(194, 155, 64, 0.35); color: var(--gold-hi); padding: 0 1
 .tac-node .tn-faction img { width: 13px; height: 13px; object-fit: contain; }
 .tac-node .tn-faction .mono { font-size: 9px; }
 .tac-node.faction-node { width: 138px; }
-.tac-node.faction-node .tn-photo { height: 72px; }
+.tac-node.faction-node .tn-photo { height: 96px; }
 .tac-node.faction-node .tn-photo img.fn-logo { width: 56px; height: 56px; object-fit: contain; }
 
 .tac-tooltip {
